@@ -12,23 +12,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using NUnit.Framework;
 
 namespace dotless.Test.Spec.ExtensibleEngine
 {
-    [TestFixture]
     [TestFixture("en-GB")]
     [TestFixture("de-DE")]
     [TestFixture("fr-FR")]
+    [TestFixture]
     public class SpecEngine
     {
         public string Locale { get; set; }
 
         public SpecEngine(string locale)
         {
-            // System.Console.WriteLine(locale);
+            //System.Console.WriteLine(locale);
             Locale = locale;
         }
 
@@ -41,120 +45,23 @@ namespace dotless.Test.Spec.ExtensibleEngine
                 Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo(Locale);
         }
 
-        private const string Upcoming = "Upcoming functionality";
-
-        [Test]
-        public void ShouldParseAccessors()
+        public static IEnumerable<string> Files
         {
-            SpecHelper.ShouldEqual("accessors"); 
-        }
-        [Test]
-        public void ShouldGroupSelectorsWhenItCan()
-        {
-            SpecHelper.ShouldEqual("selectors"); 
-        }
-        [Test]
-        public void ShouldParseABigFile()
-        {
-            SpecHelper.ShouldEqual("big"); 
-        }
-        [Test]
-        public void ShouldHandleComplexColorOperations()
-        {
-            SpecHelper.ShouldEqual("colors"); 
-        }
-        [Test]
-        public void ShouldParseComments()
-        {
-            SpecHelper.ShouldEqual("comments"); 
-        }
-        [Test]
-        public void ShouldParseCss3()
-        {
-            SpecHelper.ShouldEqual("css-3"); 
-        }
-        [Test]
-        public void ShouldParseCss()
-        {
-            SpecHelper.ShouldEqual("css"); 
-        }
-        [Test]
-        public void ShouldHandleSomeFunctions()
-        {
-            SpecHelper.ShouldEqual("functions"); 
-        }
-        [Test]
-        public void ShouldWorkWithImport()
-        {
-            SpecHelper.ShouldEqual("import"); 
-        }
-        [Test]
-        public void ShouldEvaluateVariablesLazily()
-        {
-            SpecHelper.ShouldEqual("lazy-eval"); 
-        }
-        [Test]
-        public void ShouldParseMixins()
-        {
-            SpecHelper.ShouldEqual("mixins"); 
-        }
-        [Test]
-        public void ShouldParseMixinsWithArguments()
-        {
-            SpecHelper.ShouldEqual("mixins-args"); 
-        }
-        [Test]
-        public void ShouldParseOperations()
-        {
-            SpecHelper.ShouldEqual("operations"); 
-        }
-        [Test]
-        public void ShouldParseNestedRules()
-        {
-            SpecHelper.ShouldEqual("rulesets"); 
-        }
-        [Test]
-        public void ShouldManageScope()
-        {
-            SpecHelper.ShouldEqual("scope"); 
-        }
-        [Test]
-        public void ShouldManageStrings()
-        {
-            SpecHelper.ShouldEqual("strings"); 
-        }
-        [Test]
-        public void ShouldManageVariables()
-        {
-            SpecHelper.ShouldEqual("variables"); 
-        }
-        [Test]
-        public void ShouldManageWhitespace()
-        {
-            //NOTE: Change this test from original as it was testing rouping and whitespace, which is wrong!
-            //See ShouldMergeSameElement for grouping tests
-            SpecHelper.ShouldEqual("whitespace"); 
+            get
+            {
+                return Directory.GetFiles(@"Spec\ExtensibleEngine\less")
+                  .Select(f => Path.GetFileNameWithoutExtension(f));
+            }
         }
 
         [Test]
-        public void ShouldMergeSameElement()
+        public void RunSpec([ValueSource("Files")] string file)
         {
-            SpecHelper.ShouldEqual("merge-same");
+            if (file.Contains("(") && file.EndsWith(")"))
+                Assert.Ignore();
+
+            SpecHelper.ShouldEqual(file);
         }
-        [Test]
-        public void ShouldManageNamespacedMixins()
-        {
-            SpecHelper.ShouldEqual("namespaces");
-        }
-        [Test]
-        public void CantMixVariableContexts()
-        {
-            SpecHelper.ShouldEqual("mixed-context-variables");
-        }
-        [Test]
-        public void CantWorkWithDoublesInNumbers()
-        {
-            SpecHelper.ShouldEqual("decimal-round");
-        }
+        
     }
 }

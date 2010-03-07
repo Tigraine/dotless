@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System;
+
 namespace dotless.Core.engine
 {
     using System.Collections.Generic;
@@ -24,6 +26,7 @@ namespace dotless.Core.engine
     {
         public string Name { get; set; }
         public Selector Selector { get; set; }
+        public override bool Hide { get; set; }
 
         public ElementBlock(string name, string selector)
         {
@@ -167,7 +170,8 @@ namespace dotless.Core.engine
             {
                 nodes = GetNodesByIdent(ident, el).Cast<ElementBlock>().ToList();
             }
-            if (nodes == null || nodes.Count == 0) throw new VariableNameException(ident);
+            if (nodes == null || nodes.Count == 0) 
+                throw new VariableNameException(ident);
             return nodes;
         }
         public T NearestAs<T>(string ident) { return (T)Nearest(ident); } 

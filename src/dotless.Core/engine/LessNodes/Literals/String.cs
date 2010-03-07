@@ -12,38 +12,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System.Text.RegularExpressions;
+
 namespace dotless.Core.engine
 {
     public class String : Literal
     {
+            private readonly Regex pattern =
+                new Regex(
+                    @"
+^
+(?<quotes> "" (?<double>) | ' (?<single>) | ) 
+(?<content>.*?)
+( "" (?(single)(?!)) | ' (?(double)(?!)) | (?(double)(?!)) (?(single)(?!)) )
+$", RegexOptions.IgnorePatternWhitespace);
+
         public string Content { get; set; }
         public string Quotes { get; set; }
         
         public String(string str)
         {
-            
-            switch(str.Substring(0,1))
-            {
-                case "\"":
-                    Quotes = "\"";
-                    Content = str.Replace("\"", "");
-                    break;
-                case "'":
-                    Quotes = "'";
-                    Content = str.Replace("'", "");
-                    break;
-                default:
-                    Quotes = string.Empty;
-                    Content = string.Empty;
-                    break;
-            }
-            Value = Content;
-            //TODO: learn bloody RegEx
-            //var pattern = new Regex(@"('|"")(.*?)()");
-            //var match = pattern.Matches(str);
-            //if (match.Count <= 1) return;
-            //Quotes = match[0].Value;
-            //Content = match[1].Value;
+            var match = pattern.Match(str);
+
+            Quotes = match.Groups["quotes"].ToString();
+            Content = match.Groups["content"].ToString();
         }
 
         public override string ToString()

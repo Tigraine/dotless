@@ -1,3 +1,9 @@
 h1 a:hover, h1 p:hover, h2 a:hover, h2 p:hover, h3 a:hover, h3 p:hover { color: red; }
 #all, #the, #same { color: blue; }
 ul, li, div, q, blockquote, textarea { margin: 0; }
+td {
+  margin: 0;
+  padding: 0;
+  line-height: 1em;
+}
+input { line-height: 1em; }

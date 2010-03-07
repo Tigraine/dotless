@@ -22,14 +22,22 @@ namespace dotless.Core.engine
     public class Expression : List<INode>, INode, IEvaluatable
     {
         public INode Parent { get; set; }
+
+        private string _delimiter = "";
+        public string Delimiter
+        {
+            get { return _delimiter; }
+            set { _delimiter = value.Trim(); }
+        }
+
         public string ToCss()
         {
-            return string.Join(" ", this.Select(x => x.ToCss()).ToArray());
+            return string.Join(Delimiter + " ", this.Select(x => x.ToCss()).ToArray());
         }
 
         public override string ToString()
         {
-            return string.Join(" ", this.Select(x => x.ToString()).ToArray());
+            return string.Join(", ", this.Select(x => x.ToString()).ToArray());
         }
 
         public IList<INode> Path(INode node)
@@ -47,6 +55,10 @@ namespace dotless.Core.engine
         {
             return Path(this);
         }
+
+        public Expression()
+        {
+        }
         public Expression(IEnumerable<INode> arr) : this(arr, null)
         {
         }
@@ -55,6 +67,7 @@ namespace dotless.Core.engine
             AddRange(arr); //NOTE: This may not be correct approach 
             Parent = parent;
         }
+
         public bool Terminal {
             get { return Expressions.Count() == 0; }
         }

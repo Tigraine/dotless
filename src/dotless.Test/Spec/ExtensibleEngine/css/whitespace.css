@@ -1,6 +1,7 @@
-.a, .b, .c, .d, .e, .f, .g, .h, .i { color: white; }
-.j {
+.whitespace, .white, .space, .mania { color: white; }
+.no-semi-colon {
   color: white;
   white-space: pre;
+  border: 2px solid white;
 }
-.k { border: 2px solid black; }
+.newlines { border: 2px solid black; }

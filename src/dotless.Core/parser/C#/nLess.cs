@@ -1,4 +1,4 @@
-/* created on 22/02/2010 14:11:15 from peg generator V1.0 using '' as input*/
+/* created on 01/03/2010 01:42:25 from peg generator V1.0 using '' as input*/
 
 using Peg.Base;
 using System;
@@ -7,19 +7,20 @@ using System.Text;
 namespace nLess
 {
       
-      enum EnLess{Parse= 1, primary= 2, import= 3, insert= 4, import_url= 5, medias= 6, 
-                   url= 7, url_path= 8, comment= 9, declaration= 10, standard_declaration= 11, 
-                   catchall_declaration= 12, ident= 13, variable= 14, expressions= 15, 
-                   operation_expressions= 16, space_delimited_expressions= 17, important= 18, 
-                   expression= 19, @operator= 20, ruleset= 21, standard_ruleset= 22, 
-                   mixin_ruleset= 23, mixin_descendant= 24, selectors= 25, selector= 26, 
-                   arguments= 27, argument= 28, element= 29, class_id= 30, attribute= 31, 
-                   @class= 32, id= 33, tag= 34, select= 35, function= 36, function_name= 37, 
-                   entity= 38, accessor= 39, accessor_name= 40, accessor_key= 41, 
-                   cursors= 42, cursor= 43, fonts= 44, font= 45, literal= 46, dimension_list= 47, 
-                   keyword= 48, @string= 49, dimension= 50, number= 51, unit= 52, 
-                   color= 53, rgb= 54, rgb_node= 55, hex= 56, WS= 57, ws= 58, s= 59, 
-                   S= 60, ns= 61, na= 62};
+      enum EnLess{Parse= 1, primary= 2, comment= 3, ruleset= 4, standard_ruleset= 5, 
+                   hide= 6, mixin_ruleset= 7, mixin= 8, parameterized_mixin= 9, 
+                   mixin_name= 10, mixin_arguments= 11, selector_mixin= 12, selectors= 13, 
+                   selector= 14, parameters= 15, parameter= 16, import= 17, insert= 18, 
+                   import_url= 19, url= 20, url_path= 21, medias= 22, declaration= 23, 
+                   standard_declaration= 24, empty_declaration= 25, expressions= 26, 
+                   operation_expressions= 27, space_delimited_expressions= 28, expression= 29, 
+                   important= 30, ident= 31, variable= 32, element= 33, pseudo_exp= 34, 
+                   attribute= 35, @class= 36, id= 37, tag= 38, select= 39, accessor= 40, 
+                   accessor_name= 41, accessor_key= 42, @operator= 43, function= 44, 
+                   function_name= 45, arguments= 46, entity= 47, fonts= 48, font= 49, 
+                   literal= 50, keyword= 51, @string= 52, dimension= 53, number= 54, 
+                   unit= 55, color= 56, rgb= 57, rgb_node= 58, hex= 59, alpha= 60, 
+                   s= 61, S= 62, ws= 63, WS= 64, ns= 65, @as= 66};
       class nLess : PegCharParser 
       {
         
@@ -65,12 +66,13 @@ namespace nLess
         } 
         #endregion Overrides
 		#region Grammar Rules
-        public bool Parse()    /*^Parse:  primary ;*/
+        public bool Parse()    /*^Parse: primary;*/
         {
 
            return TreeAST((int)EnLess.Parse,()=> primary() );
 		}
-        public bool primary()    /*^^primary: (import / insert/ declaration / ruleset / comment)* ;*/
+        public bool primary()    /*^^primary: 
+                      (import / insert / declaration / ruleset / mixin / comment)*;*/
         {
 
            return TreeNT((int)EnLess.primary,()=>
@@ -80,71 +82,11 @@ namespace nLess
                       || insert()
                       || declaration()
                       || ruleset()
+                      || mixin()
                       || comment() ) );
 		}
-        public bool import()    /*^^import :  ws '@import'  S import_url medias? s ';' ;*/
-        {
-
-           return TreeNT((int)EnLess.import,()=>
-                And(()=>  
-                     ws()
-                  && Char('@','i','m','p','o','r','t')
-                  && S()
-                  && import_url()
-                  && Option(()=> medias() )
-                  && s()
-                  && Char(';') ) );
-		}
-        public bool insert()    /*^^insert :  ws '@insert'  S import_url medias? s ';' ;*/
-        {
-
-           return TreeNT((int)EnLess.insert,()=>
-                And(()=>  
-                     ws()
-                  && Char('@','i','n','s','e','r','t')
-                  && S()
-                  && import_url()
-                  && Option(()=> medias() )
-                  && s()
-                  && Char(';') ) );
-		}
-        public bool import_url()    /*^^import_url : ( string / url  ) ;*/
-        {
-
-           return TreeNT((int)EnLess.import_url,()=>
-                    @string() || url() );
-		}
-        public bool medias()    /*^^medias : [-a-z]+ (s ',' s [a-z]+)*;*/
-        {
-
-           return TreeNT((int)EnLess.medias,()=>
-                And(()=>  
-                     PlusRepeat(()=> (In('a','z')||OneOf("-")) )
-                  && OptRepeat(()=>    
-                      And(()=>      
-                               s()
-                            && Char(',')
-                            && s()
-                            && PlusRepeat(()=> In('a','z') ) ) ) ) );
-		}
-        public bool url()    /*^url: 'url(' url_path ')';*/
-        {
-
-           return TreeAST((int)EnLess.url,()=>
-                And(()=>  
-                     Char('u','r','l','(')
-                  && url_path()
-                  && Char(')') ) );
-		}
-        public bool url_path()    /*^url_path: (string / [-a-zA-Z0-9_%$/.&=:;#+?]+ );*/
-        {
-
-           return TreeAST((int)EnLess.url_path,()=>
-                  
-                     @string()
-                  || PlusRepeat(()=> OneOf(optimizedCharset0) ) );
-		}
-        public bool comment()    /*^^comment: ws '/*' (!'* /' . )* '* /' ws / ws '//' (![\n] .)* [\n] ws;*/
+        public bool comment()    /*^^comment:
+                  ws '/*' (!'* /' . )* '* /' ws / ws '//' (!'\n' .)* '\n' ws;*/
         {
 
            return TreeNT((int)EnLess.comment,()=>
@@ -160,68 +102,286 @@ namespace nLess
                          ws()
                       && Char('/','/')
                       && OptRepeat(()=>      
-                            And(()=>    Not(()=> OneOf("\n") ) && Any() ) )
-                      && OneOf("\n")
+                            And(()=>    Not(()=> Char('\n') ) && Any() ) )
+                      && Char('\n')
                       && ws() ) );
 		}
-        public bool declaration()    /*^^declaration:  standard_declaration / catchall_declaration ;*/
+        public bool ruleset()    /*^^ruleset:
+                    standard_ruleset / mixin_ruleset;*/
+        {
+
+           return TreeNT((int)EnLess.ruleset,()=>
+                    standard_ruleset() || mixin_ruleset() );
+		}
+        public bool standard_ruleset()    /*^^standard_ruleset:
+                    selectors '{' ws primary ws '}' s hide ws;*/
+        {
+
+           return TreeNT((int)EnLess.standard_ruleset,()=>
+                And(()=>  
+                     selectors()
+                  && Char('{')
+                  && ws()
+                  && primary()
+                  && ws()
+                  && Char('}')
+                  && s()
+                  && hide()
+                  && ws() ) );
+		}
+        public bool hide()    /*^^hide:
+                    ';'?;*/
+        {
+
+           return TreeNT((int)EnLess.hide,()=>
+                Option(()=> Char(';') ) );
+		}
+        public bool mixin_ruleset()    /*^^mixin_ruleset:
+                    ws mixin_name ws parameters ws '{' ws primary ws '}' ws;*/
+        {
+
+           return TreeNT((int)EnLess.mixin_ruleset,()=>
+                And(()=>  
+                     ws()
+                  && mixin_name()
+                  && ws()
+                  && parameters()
+                  && ws()
+                  && Char('{')
+                  && ws()
+                  && primary()
+                  && ws()
+                  && Char('}')
+                  && ws() ) );
+		}
+        public bool mixin()    /*^^mixin:
+                    parameterized_mixin / selector_mixin;*/
+        {
+
+           return TreeNT((int)EnLess.mixin,()=>
+                    parameterized_mixin() || selector_mixin() );
+		}
+        public bool parameterized_mixin()    /*^^parameterized_mixin:
+                    mixin_name mixin_arguments s ';' ws;*/
+        {
+
+           return TreeNT((int)EnLess.parameterized_mixin,()=>
+                And(()=>  
+                     mixin_name()
+                  && mixin_arguments()
+                  && s()
+                  && Char(';')
+                  && ws() ) );
+		}
+        public bool mixin_name()    /*^^mixin_name:
+                    '.' [-a-zA-Z0-9_]+;*/
+        {
+
+           return TreeNT((int)EnLess.mixin_name,()=>
+                And(()=>  
+                     Char('.')
+                  && PlusRepeat(()=>    
+                      (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
+		}
+        public bool mixin_arguments()    /*^^mixin_arguments:
+                    '(' s ((parameter &as / expressions &as) (s ',' s (parameter &as / expressions &as))*)? s ')';*/
+        {
+
+           return TreeNT((int)EnLess.mixin_arguments,()=>
+                And(()=>  
+                     Char('(')
+                  && s()
+                  && Option(()=>    
+                      And(()=>      
+                               (        
+                                       And(()=>    parameter() && Peek(()=> @as() ) )
+                                    || And(()=>    expressions() && Peek(()=> @as() ) ))
+                            && OptRepeat(()=>        
+                                    And(()=>          
+                                                 s()
+                                              && Char(',')
+                                              && s()
+                                              && (            
+                                                             And(()=>    parameter() && Peek(()=> @as() ) )
+                                                          || And(()=>              
+                                                                           expressions()
+                                                                        && Peek(()=> @as() ) )) ) ) ) )
+                  && s()
+                  && Char(')') ) );
+		}
+        public bool selector_mixin()    /*^^selector_mixin:
+                      ws selectors ';' ws;*/
+        {
+
+           return TreeNT((int)EnLess.selector_mixin,()=>
+                And(()=>    ws() && selectors() && Char(';') && ws() ) );
+		}
+        public bool selectors()    /*^^selectors:
+                      ws selector (s ',' ws selector)* ws;*/
+        {
+
+           return TreeNT((int)EnLess.selectors,()=>
+                And(()=>  
+                     ws()
+                  && selector()
+                  && OptRepeat(()=>    
+                      And(()=>    s() && Char(',') && ws() && selector() ) )
+                  && ws() ) );
+		}
+        public bool selector()    /*^^selector:
+                      (s select element s)+;*/
+        {
+
+           return TreeNT((int)EnLess.selector,()=>
+                PlusRepeat(()=>  
+                  And(()=>    s() && select() && element() && s() ) ) );
+		}
+        public bool parameters()    /*^^parameters:
+                      '(' s ')'
+                      /
+                      '(' parameter (s ',' s parameter)* ')'
+                      ;*/
+        {
+
+           return TreeNT((int)EnLess.parameters,()=>
+                  
+                     And(()=>    Char('(') && s() && Char(')') )
+                  || And(()=>    
+                         Char('(')
+                      && parameter()
+                      && OptRepeat(()=>      
+                            And(()=>    s() && Char(',') && s() && parameter() ) )
+                      && Char(')') ) );
+		}
+        public bool parameter()    /*^^parameter:
+                      variable s ':' s expressions;*/
+        {
+
+           return TreeNT((int)EnLess.parameter,()=>
+                And(()=>  
+                     variable()
+                  && s()
+                  && Char(':')
+                  && s()
+                  && expressions() ) );
+		}
+        public bool import()    /*^^import:
+                      ws '@import' S import_url medias? s ';' ws;*/
+        {
+
+           return TreeNT((int)EnLess.import,()=>
+                And(()=>  
+                     ws()
+                  && Char('@','i','m','p','o','r','t')
+                  && S()
+                  && import_url()
+                  && Option(()=> medias() )
+                  && s()
+                  && Char(';')
+                  && ws() ) );
+		}
+        public bool insert()    /*^^insert:
+                      ws '@insert' S import_url medias? s ';' ws;*/
+        {
+
+           return TreeNT((int)EnLess.insert,()=>
+                And(()=>  
+                     ws()
+                  && Char('@','i','n','s','e','r','t')
+                  && S()
+                  && import_url()
+                  && Option(()=> medias() )
+                  && s()
+                  && Char(';')
+                  && ws() ) );
+		}
+        public bool import_url()    /*^^import_url:
+                  (string / url);*/
+        {
+
+           return TreeNT((int)EnLess.import_url,()=>
+                    @string() || url() );
+		}
+        public bool url()    /*^^url:
+                      'url(' url_path ')';*/
+        {
+
+           return TreeNT((int)EnLess.url,()=>
+                And(()=>  
+                     Char('u','r','l','(')
+                  && url_path()
+                  && Char(')') ) );
+		}
+        public bool url_path()    /*^^url_path:
+                      (string / [-a-zA-Z0-9_%$/.&=:;#+?]+);*/
+        {
+
+           return TreeNT((int)EnLess.url_path,()=>
+                  
+                     @string()
+                  || PlusRepeat(()=> OneOf(optimizedCharset0) ) );
+		}
+        public bool medias()    /*^^medias:
+                  [-a-z]+ (s ',' s [a-z]+)*;*/
+        {
+
+           return TreeNT((int)EnLess.medias,()=>
+                And(()=>  
+                     PlusRepeat(()=> (In('a','z')||OneOf("-")) )
+                  && OptRepeat(()=>    
+                      And(()=>      
+                               s()
+                            && Char(',')
+                            && s()
+                            && PlusRepeat(()=> In('a','z') ) ) ) ) );
+		}
+        public bool declaration()    /*^^declaration:
+                      standard_declaration / empty_declaration;*/
         {
 
            return TreeNT((int)EnLess.declaration,()=>
-                    standard_declaration() || catchall_declaration() );
+                    standard_declaration() || empty_declaration() );
 		}
-        public bool standard_declaration()    /*standard_declaration: ws (ident / variable)  ws (comment)* ':' ws (comment)* expressions (comment)* ws (';'/ ws &'}') ws ;*/
+        public bool standard_declaration()    /*^^standard_declaration:
+                      ws (ident / variable) s ':' ws expressions (ws ',' ws expressions)* s (';'/ ws &'}') ws;*/
         {
 
-           return And(()=>  
+           return TreeNT((int)EnLess.standard_declaration,()=>
+                And(()=>  
                      ws()
                   && (    ident() || variable())
-                  && ws()
-                  && OptRepeat(()=> comment() )
+                  && s()
                   && Char(':')
                   && ws()
-                  && OptRepeat(()=> comment() )
                   && expressions()
-                  && OptRepeat(()=> comment() )
-                  && ws()
+                  && OptRepeat(()=>    
+                      And(()=>      
+                               ws()
+                            && Char(',')
+                            && ws()
+                            && expressions() ) )
+                  && s()
                   && (    
                          Char(';')
                       || And(()=>    ws() && Peek(()=> Char('}') ) ))
-                  && ws() );
+                  && ws() ) );
 		}
-        public bool catchall_declaration()    /*catchall_declaration:  ws ident s ':' s ';' ws ;*/
+        public bool empty_declaration()    /*^^empty_declaration:
+                      ws ident s ':' s ';' ws;*/
         {
 
-           return And(()=>  
+           return TreeNT((int)EnLess.empty_declaration,()=>
+                And(()=>  
                      ws()
                   && ident()
                   && s()
                   && Char(':')
                   && s()
                   && Char(';')
-                  && ws() );
+                  && ws() ) );
 		}
-        public bool ident()    /*^^ident: '*'? '-'? [-_a-zA-Z] [-_a-zA-Z0-9]*;*/
-        {
-
-           return TreeNT((int)EnLess.ident,()=>
-                And(()=>  
-                     Option(()=> Char('*') )
-                  && Option(()=> Char('-') )
-                  && (In('a','z', 'A','Z')||OneOf("-_"))
-                  && OptRepeat(()=>    
-                      (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
-		}
-        public bool variable()    /*^^variable: '@' [-_a-zA-Z0-9]+;*/
-        {
-
-           return TreeNT((int)EnLess.variable,()=>
-                And(()=>  
-                     Char('@')
-                  && PlusRepeat(()=>    
-                      (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
-		}
-        public bool expressions()    /*^^expressions: operation_expressions / space_delimited_expressions / [-a-zA-Z0-9_%* /.&=:,#+? \[\]()]+ ;*/
+        public bool expressions()    /*^^expressions:
+                      operation_expressions / space_delimited_expressions / [-a-zA-Z0-9_.&* /=:,+? \[\]()#%]+ ;*/
         {
 
            return TreeNT((int)EnLess.expressions,()=>
@@ -230,7 +390,8 @@ namespace nLess
                   || space_delimited_expressions()
                   || PlusRepeat(()=> OneOf(optimizedCharset1) ) );
 		}
-        public bool operation_expressions()    /*^^operation_expressions:  expression (operator expression)+;*/
+        public bool operation_expressions()    /*^^operation_expressions:
+                      expression (operator expression)+;*/
         {
 
            return TreeNT((int)EnLess.operation_expressions,()=>
@@ -239,7 +400,8 @@ namespace nLess
                   && PlusRepeat(()=>    
                       And(()=>    @operator() && expression() ) ) ) );
 		}
-        public bool space_delimited_expressions()    /*^^space_delimited_expressions: expression (WS expression)* important? ;*/
+        public bool space_delimited_expressions()    /*^^space_delimited_expressions:
+                      expression (WS expression)* important?;*/
         {
 
            return TreeNT((int)EnLess.space_delimited_expressions,()=>
@@ -248,13 +410,8 @@ namespace nLess
                   && OptRepeat(()=> And(()=>    WS() && expression() ) )
                   && Option(()=> important() ) ) );
 		}
-        public bool important()    /*^^important: s '!' s 'important' ;*/
-        {
-
-           return TreeNT((int)EnLess.important,()=>
-                And(()=>    s() && Char('!') && s() && Char("important") ) );
-		}
-        public bool expression()    /*^^expression: '(' s expressions s ')' / entity ;*/
+        public bool expression()    /*^^expression:
+                      '(' s expressions s ')' / entity ;*/
         {
 
            return TreeNT((int)EnLess.expression,()=>
@@ -267,160 +424,78 @@ namespace nLess
                       && Char(')') )
                   || entity() );
 		}
-        public bool @operator()    /*^^operator: S [-+* /] S / [-+* /] ;*/
+        public bool important()    /*^^important:
+                      s '!' s 'important';*/
         {
 
-           return TreeNT((int)EnLess.@operator,()=>
-                  
-                     And(()=>    S() && OneOf("-+*/") && S() )
-                  || OneOf("-+*/") );
+           return TreeNT((int)EnLess.important,()=>
+                And(()=>    s() && Char('!') && s() && Char("important") ) );
 		}
-        public bool ruleset()    /*ruleset : standard_ruleset / mixin_ruleset;*/
+        public bool ident()    /*^^ident:
+                  '*'? '-'? [-a-z_] [-a-z0-9_]*;*/
         {
 
-           return     standard_ruleset() || mixin_ruleset();
-		}
-        public bool standard_ruleset()    /*^^standard_ruleset: ws selectors [{] ws primary ws [}] ws;*/
-        {
-
-           return TreeNT((int)EnLess.standard_ruleset,()=>
+           return TreeNT((int)EnLess.ident,()=>
                 And(()=>  
-                     ws()
-                  && selectors()
-                  && OneOf("{")
-                  && ws()
-                  && primary()
-                  && ws()
-                  && OneOf("}")
-                  && ws() ) );
+                     Option(()=> Char('*') )
+                  && Option(()=> Char('-') )
+                  && (In('a','z')||OneOf("-_"))
+                  && OptRepeat(()=> (In('a','z', '0','9')||OneOf("-_")) ) ) );
 		}
-        public bool mixin_ruleset()    /*^^mixin_ruleset :  ws mixin_descendant (s ',' ws mixin_descendant)* ws ';' ws;*/
+        public bool variable()    /*^^variable:
+                      '@' [-a-zA-Z0-9_]+;*/
         {
 
-           return TreeNT((int)EnLess.mixin_ruleset,()=>
+           return TreeNT((int)EnLess.variable,()=>
                 And(()=>  
-                     ws()
-                  && mixin_descendant()
-                  && OptRepeat(()=>    
-                      And(()=>      
-                               s()
-                            && Char(',')
-                            && ws()
-                            && mixin_descendant() ) )
-                  && ws()
-                  && Char(';')
-                  && ws() ) );
+                     Char('@')
+                  && PlusRepeat(()=>    
+                      (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
 		}
-        public bool mixin_descendant()    /*^^mixin_descendant: ws selector (WS selector)* ws ;*/
-        {
-
-           return TreeNT((int)EnLess.mixin_descendant,()=>
-                And(()=>  
-                     ws()
-                  && selector()
-                  && OptRepeat(()=> And(()=>    WS() && selector() ) )
-                  && ws() ) );
-		}
-        public bool selectors()    /*^^selectors :  ws selector (s ',' ws selector)* ws ;*/
-        {
-
-           return TreeNT((int)EnLess.selectors,()=>
-                And(()=>  
-                     ws()
-                  && selector()
-                  && OptRepeat(()=>    
-                      And(()=>    s() && Char(',') && ws() && selector() ) )
-                  && ws() ) );
-		}
-        public bool selector()    /*^^selector : (s select element s)+ ws arguments? ;*/
-        {
-
-           return TreeNT((int)EnLess.selector,()=>
-                And(()=>  
-                     PlusRepeat(()=>    
-                      And(()=>    s() && select() && element() && s() ) )
-                  && ws()
-                  && Option(()=> arguments() ) ) );
-		}
-        public bool arguments()    /*^^arguments : '(' s (argument s (',' s argument s)*)? ')';*/
-        {
-
-           return TreeNT((int)EnLess.arguments,()=>
-                And(()=>  
-                     Char('(')
-                  && s()
-                  && Option(()=>    
-                      And(()=>      
-                               argument()
-                            && s()
-                            && OptRepeat(()=>        
-                                    And(()=>          
-                                                 Char(',')
-                                              && s()
-                                              && argument()
-                                              && s() ) ) ) )
-                  && Char(')') ) );
-		}
-        public bool argument()    /*^^argument : color &na / number unit &na / string &na / [a-zA-Z]+ '=' dimension &na / function &na / expressions &na / keyword (S keyword)* &na / variable s ':' s expressions &na / [-a-zA-Z0-9_%$/.&=:;#+?]+ &na;*/
-        {
-
-           return TreeNT((int)EnLess.argument,()=>
-                  
-                     And(()=>    color() && Peek(()=> na() ) )
-                  || And(()=>    number() && unit() && Peek(()=> na() ) )
-                  || And(()=>    @string() && Peek(()=> na() ) )
-                  || And(()=>    
-                         PlusRepeat(()=> In('a','z', 'A','Z') )
-                      && Char('=')
-                      && dimension()
-                      && Peek(()=> na() ) )
-                  || And(()=>    function() && Peek(()=> na() ) )
-                  || And(()=>    expressions() && Peek(()=> na() ) )
-                  || And(()=>    
-                         keyword()
-                      && OptRepeat(()=> And(()=>    S() && keyword() ) )
-                      && Peek(()=> na() ) )
-                  || And(()=>    
-                         variable()
-                      && s()
-                      && Char(':')
-                      && s()
-                      && expressions()
-                      && Peek(()=> na() ) )
-                  || And(()=>    
-                         PlusRepeat(()=> OneOf(optimizedCharset2) )
-                      && Peek(()=> na() ) ) );
-		}
-        public bool element()    /*^^element : (class_id / tag / ident) attribute* ('(' (ident attribute* / attribute+) ')')? / attribute+ / '@media' / '@font-face';*/
+        public bool element()    /*^^element:
+                 ( (class / id / tag / ident) attribute* ('(' [a-zA-Z]+ ')' / '(' (pseudo_exp / selector / [0-9]+) ')' )? )+
+                 / attribute+ / '@media' / '@font-face'
+                 ;*/
         {
 
            return TreeNT((int)EnLess.element,()=>
                   
-                     And(()=>    
-                         (    class_id() || tag() || ident())
-                      && OptRepeat(()=> attribute() )
-                      && Option(()=>      
-                            And(()=>        
-                                       Char('(')
-                                    && (          
+                     PlusRepeat(()=>    
+                      And(()=>      
+                               (    @class() || id() || tag() || ident())
+                            && OptRepeat(()=> attribute() )
+                            && Option(()=>        
+                                              
                                                  And(()=>            
-                                                             ident()
-                                                          && OptRepeat(()=> attribute() ) )
-                                              || PlusRepeat(()=> attribute() ))
-                                    && Char(')') ) ) )
+                                                             Char('(')
+                                                          && PlusRepeat(()=> In('a','z', 'A','Z') )
+                                                          && Char(')') )
+                                              || And(()=>            
+                                                             Char('(')
+                                                          && (              
+                                                                           pseudo_exp()
+                                                                        || selector()
+                                                                        || PlusRepeat(()=> In('0','9') ))
+                                                          && Char(')') ) ) ) )
                   || PlusRepeat(()=> attribute() )
                   || Char('@','m','e','d','i','a')
                   || Char("@font-face") );
 		}
-        public bool class_id()    /*^^class_id : tag? (class / id)+;*/
+        public bool pseudo_exp()    /*pseudo_exp:
+                  '-'? ([0-9]+)? 'n' ([-+] [0-9]+)?;*/
         {
 
-           return TreeNT((int)EnLess.class_id,()=>
-                And(()=>  
-                     Option(()=> tag() )
-                  && PlusRepeat(()=>     @class() || id() ) ) );
+           return And(()=>  
+                     Option(()=> Char('-') )
+                  && Option(()=> PlusRepeat(()=> In('0','9') ) )
+                  && Char('n')
+                  && Option(()=>    
+                      And(()=>      
+                               OneOf("-+")
+                            && PlusRepeat(()=> In('0','9') ) ) ) );
 		}
-        public bool attribute()    /*^^attribute :  '[' tag ([|~*$^]? '=') (tag / string) ']' / '[' (tag / string) ']';*/
+        public bool attribute()    /*^^attribute:
+                  '[' tag ([|~*$^]? '=') (string / [-a-zA-Z_0-9]+) ']' / '[' (tag / string) ']';*/
         {
 
            return TreeNT((int)EnLess.attribute,()=>
@@ -431,14 +506,18 @@ namespace nLess
                       && And(()=>      
                                Option(()=> OneOf("|~*$^") )
                             && Char('=') )
-                      && (    tag() || @string())
+                      && (      
+                               @string()
+                            || PlusRepeat(()=>        
+                                    (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ))
                       && Char(']') )
                   || And(()=>    
                          Char('[')
                       && (    tag() || @string())
                       && Char(']') ) );
 		}
-        public bool @class()    /*^^class:  '.' [_a-zA-Z] [-a-zA-Z0-9_]*;*/
+        public bool @class()    /*^^class:
+                  '.' [_a-zA-Z] [-a-zA-Z0-9_]*;*/
         {
 
            return TreeNT((int)EnLess.@class,()=>
@@ -448,7 +527,8 @@ namespace nLess
                   && OptRepeat(()=>    
                       (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
 		}
-        public bool id()    /*^^id: '#' [_a-zA-Z] [-a-zA-Z0-9_]*;*/
+        public bool id()    /*^^id:
+                  '#' [_a-zA-Z] [-a-zA-Z0-9_]*;*/
         {
 
            return TreeNT((int)EnLess.id,()=>
@@ -458,7 +538,8 @@ namespace nLess
                   && OptRepeat(()=>    
                       (In('a','z', 'A','Z', '0','9')||OneOf("-_")) ) ) );
 		}
-        public bool tag()    /*^^tag : [a-zA-Z] [-a-zA-Z]* [0-9]? / '*';*/
+        public bool tag()    /*^^tag:
+                  [a-zA-Z] [-a-zA-Z]* [0-9]? / '*';*/
         {
 
            return TreeNT((int)EnLess.tag,()=>
@@ -469,7 +550,8 @@ namespace nLess
                       && Option(()=> In('0','9') ) )
                   || Char('*') );
 		}
-        public bool select()    /*^^select : (s [+>~] s / '::' / s ':' / S)?;*/
+        public bool select()    /*^^select:
+                  (s [+>~] s / '::' / s ':' / S)?;*/
         {
 
            return TreeNT((int)EnLess.select,()=>
@@ -480,34 +562,8 @@ namespace nLess
                       || And(()=>    s() && Char(':') )
                       || S() ) );
 		}
-        public bool function()    /*^^function: function_name arguments ;*/
-        {
-
-           return TreeNT((int)EnLess.function,()=>
-                And(()=>    function_name() && arguments() ) );
-		}
-        public bool function_name()    /*^^function_name: [-a-zA-Z_]+;
-
-//******************************************** Entity*/
-        {
-
-           return TreeNT((int)EnLess.function_name,()=>
-                PlusRepeat(()=> (In('a','z', 'A','Z')||OneOf("-_")) ) );
-		}
-        public bool entity()    /*^^entity :  fonts / function / accessor / keyword / variable / literal / cursors ;*/
-        {
-
-           return TreeNT((int)EnLess.entity,()=>
-                  
-                     fonts()
-                  || function()
-                  || accessor()
-                  || keyword()
-                  || variable()
-                  || literal()
-                  || cursors() );
-		}
-        public bool accessor()    /*^^accessor: accessor_name '[' accessor_key ']';*/
+        public bool accessor()    /*^^accessor:
+                      accessor_name '[' accessor_key ']';*/
         {
 
            return TreeNT((int)EnLess.accessor,()=>
@@ -517,37 +573,83 @@ namespace nLess
                   && accessor_key()
                   && Char(']') ) );
 		}
-        public bool accessor_name()    /*^^accessor_name: (class_id / tag) ;*/
+        public bool accessor_name()    /*^^accessor_name:
+                      (class / id / tag);*/
         {
 
            return TreeNT((int)EnLess.accessor_name,()=>
-                    class_id() || tag() );
+                    @class() || id() || tag() );
 		}
-        public bool accessor_key()    /*^^accessor_key: (string / variable) ;*/
+        public bool accessor_key()    /*^^accessor_key:
+                      (string / variable);*/
         {
 
            return TreeNT((int)EnLess.accessor_key,()=>
                     @string() || variable() );
 		}
-        public bool cursors()    /*^^cursors : cursor (s ',' s cursor)+  ;*/
+        public bool @operator()    /*^^operator:
+                      S [-+* /] S / [-+* /] ;*/
         {
 
-           return TreeNT((int)EnLess.cursors,()=>
-                And(()=>  
-                     cursor()
-                  && PlusRepeat(()=>    
-                      And(()=>    s() && Char(',') && s() && cursor() ) ) ) );
-		}
-        public bool cursor()    /*^^cursor : [-a-zA-Z0-9]*  / url ;*/
-        {
-
-           return TreeNT((int)EnLess.cursor,()=>
+           return TreeNT((int)EnLess.@operator,()=>
                   
-                     OptRepeat(()=>    
-                      (In('a','z', 'A','Z', '0','9')||OneOf("-")) )
-                  || url() );
+                     And(()=>    S() && OneOf("-+*/") && S() )
+                  || OneOf("-+*/") );
 		}
-        public bool fonts()    /*^^fonts : font (s ',' s font)+  ;*/
+        public bool function()    /*^^function:
+                      function_name arguments;*/
+        {
+
+           return TreeNT((int)EnLess.function,()=>
+                And(()=>    function_name() && arguments() ) );
+		}
+        public bool function_name()    /*^^function_name:
+                      [-a-zA-Z_]+;*/
+        {
+
+           return TreeNT((int)EnLess.function_name,()=>
+                PlusRepeat(()=> (In('a','z', 'A','Z')||OneOf("-_")) ) );
+		}
+        public bool arguments()    /*^^arguments:
+                      '(' s expressions s (',' s expressions s)* ')'
+                      /
+                      '(' s ')'
+                      ;*/
+        {
+
+           return TreeNT((int)EnLess.arguments,()=>
+                  
+                     And(()=>    
+                         Char('(')
+                      && s()
+                      && expressions()
+                      && s()
+                      && OptRepeat(()=>      
+                            And(()=>        
+                                       Char(',')
+                                    && s()
+                                    && expressions()
+                                    && s() ) )
+                      && Char(')') )
+                  || And(()=>    Char('(') && s() && Char(')') ) );
+		}
+        public bool entity()    /*^^entity:
+                      url / alpha / function / accessor / keyword / variable / literal / font;*/
+        {
+
+           return TreeNT((int)EnLess.entity,()=>
+                  
+                     url()
+                  || alpha()
+                  || function()
+                  || accessor()
+                  || keyword()
+                  || variable()
+                  || literal()
+                  || font() );
+		}
+        public bool fonts()    /*^^fonts:
+                        font (s ',' s font)+;*/
         {
 
            return TreeNT((int)EnLess.fonts,()=>
@@ -556,7 +658,11 @@ namespace nLess
                   && PlusRepeat(()=>    
                       And(()=>    s() && Char(',') && s() && font() ) ) ) );
 		}
-        public bool font()    /*^^font: [a-zA-Z] [-a-zA-Z0-9]* / string  ;*/
+        public bool font()    /*^^font:
+                      [a-zA-Z] [-a-zA-Z0-9]* !ns
+                      / 
+                      string
+                      ;*/
         {
 
            return TreeNT((int)EnLess.font,()=>
@@ -564,31 +670,28 @@ namespace nLess
                      And(()=>    
                          In('a','z', 'A','Z')
                       && OptRepeat(()=>      
-                            (In('a','z', 'A','Z', '0','9')||OneOf("-")) ) )
+                            (In('a','z', 'A','Z', '0','9')||OneOf("-")) )
+                      && Not(()=> ns() ) )
                   || @string() );
 		}
-        public bool literal()    /*^^literal: color / dimension_list / number unit / string ;*/
+        public bool literal()    /*^^literal:
+                      color / (dimension / [-a-z]+) '/' dimension / number unit / string;*/
         {
 
            return TreeNT((int)EnLess.literal,()=>
                   
                      color()
-                  || dimension_list()
+                  || And(()=>    
+                         (      
+                               dimension()
+                            || PlusRepeat(()=> (In('a','z')||OneOf("-")) ))
+                      && Char('/')
+                      && dimension() )
                   || And(()=>    number() && unit() )
                   || @string() );
 		}
-        public bool dimension_list()    /*^^dimension_list:  (dimension / [-a-z]+) '/' dimension;*/
-        {
-
-           return TreeNT((int)EnLess.dimension_list,()=>
-                And(()=>  
-                     (    
-                         dimension()
-                      || PlusRepeat(()=> (In('a','z')||OneOf("-")) ))
-                  && Char('/')
-                  && dimension() ) );
-		}
-        public bool keyword()    /*^^keyword: [-a-zA-Z]+ !ns;*/
+        public bool keyword()    /*^^keyword:
+                      [-a-zA-Z]+ !ns;*/
         {
 
            return TreeNT((int)EnLess.keyword,()=>
@@ -596,10 +699,14 @@ namespace nLess
                      PlusRepeat(()=> (In('a','z', 'A','Z')||OneOf("-")) )
                   && Not(()=> ns() ) ) );
 		}
-        public bool @string()    /*^string: ['] (!['] . )* ['] / ["] (!["] . )* ["] ;*/
+        public bool @string()    /*^^string:
+                  ['] (!['] . )* [']
+                  /
+                  ["] (!["] . )* ["]
+                  ;*/
         {
 
-           return TreeAST((int)EnLess.@string,()=>
+           return TreeNT((int)EnLess.@string,()=>
                   
                      And(()=>    
                          OneOf("'")
@@ -612,13 +719,15 @@ namespace nLess
                             And(()=>    Not(()=> OneOf("\"") ) && Any() ) )
                       && OneOf("\"") ) );
 		}
-        public bool dimension()    /*^^dimension: number unit;*/
+        public bool dimension()    /*^^dimension:
+                  number unit;*/
         {
 
            return TreeNT((int)EnLess.dimension,()=>
                 And(()=>    number() && unit() ) );
 		}
-        public bool number()    /*^^number: '-'? [0-9]* '.' [0-9]+ / '-'? [0-9]+;*/
+        public bool number()    /*^^number:
+                      '-'? [0-9]* '.' [0-9]+ / '-'? [0-9]+;*/
         {
 
            return TreeNT((int)EnLess.number,()=>
@@ -632,69 +741,88 @@ namespace nLess
                          Option(()=> Char('-') )
                       && PlusRepeat(()=> In('0','9') ) ) );
 		}
-        public bool unit()    /*^^unit: ('px'/'em'/'pc'/'%'/'ex'/'s'/'pt'/'cm'/'mm')?;*/
+        public bool unit()    /*^^unit:
+                      ('px'/'em'/'pc'/'%'/'ex'/'in'/'deg'/'s'/'pt'/'cm'/'mm')?;*/
         {
 
            return TreeNT((int)EnLess.unit,()=>
                 Option(()=> OneOfLiterals(optimizedLiterals0) ) );
 		}
-        public bool color()    /*^^color: '#' rgb;*/
+        public bool color()    /*^^color:
+                      '#' rgb;*/
         {
 
            return TreeNT((int)EnLess.color,()=>
                 And(()=>    Char('#') && rgb() ) );
 		}
-        public bool rgb()    /*^rgb:(rgb_node)(rgb_node)(rgb_node) / hex hex hex ;*/
+        public bool rgb()    /*^^rgb:
+                      rgb_node rgb_node rgb_node
+                      /
+                      hex hex hex;*/
         {
 
-           return TreeAST((int)EnLess.rgb,()=>
+           return TreeNT((int)EnLess.rgb,()=>
                   
                      And(()=>    rgb_node() && rgb_node() && rgb_node() )
                   || And(()=>    hex() && hex() && hex() ) );
 		}
-        public bool rgb_node()    /*^rgb_node : hex hex;*/
+        public bool rgb_node()    /*^^rgb_node:
+                  hex hex;*/
         {
 
-           return TreeAST((int)EnLess.rgb_node,()=>
+           return TreeNT((int)EnLess.rgb_node,()=>
                 And(()=>    hex() && hex() ) );
 		}
-        public bool hex()    /*^hex: [a-fA-F0-9];
-
-//******************************************** Common*/
+        public bool hex()    /*^^hex:
+                  [a-fA-F0-9];*/
         {
 
-           return TreeAST((int)EnLess.hex,()=>
+           return TreeNT((int)EnLess.hex,()=>
                 In('a','f', 'A','F', '0','9') );
 		}
-        public bool WS()    /*WS: [ \r\n\t]+;*/
+        public bool alpha()    /*^^alpha:
+                      'alpha' s '(' s 'opacity=' variable ')';*/
         {
 
-           return PlusRepeat(()=> OneOf(" \r\n\t") );
+           return TreeNT((int)EnLess.alpha,()=>
+                And(()=>  
+                     Char('a','l','p','h','a')
+                  && s()
+                  && Char('(')
+                  && s()
+                  && Char("opacity=")
+                  && variable()
+                  && Char(')') ) );
 		}
-        public bool ws()    /*ws: [ \r\n\t]*;*/
-        {
-
-           return OptRepeat(()=> OneOf(" \r\n\t") );
-		}
-        public bool s()    /*s:  [ ]*;*/
+        public bool s()    /*s: [ ]*;*/
         {
 
            return OptRepeat(()=> OneOf(" ") );
 		}
-        public bool S()    /*S:  [ ]+;*/
+        public bool S()    /*S: [ ]+;*/
         {
 
            return PlusRepeat(()=> OneOf(" ") );
 		}
-        public bool ns()    /*ns: ![ ;,)}\n] .;*/
+        public bool ws()    /*ws: [\n\r\t ]*;*/
         {
 
-           return And(()=>    Not(()=> OneOf(" ;,)}\n") ) && Any() );
+           return OptRepeat(()=> OneOf("\n\r\t ") );
 		}
-        public bool na()    /*na: s (',' / ')');*/
+        public bool WS()    /*WS: [\n\r\t ]+;*/
         {
 
-           return And(()=>    s() && (    Char(',') || Char(')')) );
+           return PlusRepeat(()=> OneOf("\n\r\t ") );
+		}
+        public bool ns()    /*ns: ![ ;,!})\n\r] .;*/
+        {
+
+           return And(()=>    Not(()=> OneOf(optimizedCharset2) ) && Any() );
+		}
+        public bool @as()    /*as: s [,)];*/
+        {
+
+           return And(()=>    s() && OneOf(",)") );
 		}
 		#endregion Grammar Rules
 
@@ -725,30 +853,24 @@ namespace nLess
                    new OptimizedCharset.Range('A','Z'),
                    new OptimizedCharset.Range('0','9'),
                    };
-               char[] oneOfChars = new char[]    {'-','_','%','*','/'
-                                                  ,'.','&','=',':',','
-                                                  ,'#','+','?',' ','\\'
-                                                  ,'[',']','(',')'};
+               char[] oneOfChars = new char[]    {'-','_','.','&','*'
+                                                  ,'/','=',':',',','+'
+                                                  ,'?',' ','\\','[',']'
+                                                  ,'(',')','#','%'};
                optimizedCharset1= new OptimizedCharset(ranges,oneOfChars);
             }
             
             {
-               OptimizedCharset.Range[] ranges = new OptimizedCharset.Range[]
-                  {new OptimizedCharset.Range('a','z'),
-                   new OptimizedCharset.Range('A','Z'),
-                   new OptimizedCharset.Range('0','9'),
-                   };
-               char[] oneOfChars = new char[]    {'-','_','%','$','/'
-                                                  ,'.','&','=',':',';'
-                                                  ,'#','+','?'};
-               optimizedCharset2= new OptimizedCharset(ranges,oneOfChars);
+               char[] oneOfChars = new char[]    {' ',';',',','!','}'
+                                                  ,')','\n','\r'};
+               optimizedCharset2= new OptimizedCharset(null,oneOfChars);
             }
             
             
             {
                string[] literals=
-               { "px","em","pc","%","ex","s","pt","cm",
-                  "mm" };
+               { "px","em","pc","%","ex","in","deg","s",
+                  "pt","cm","mm" };
                optimizedLiterals0= new OptimizedLiterals(literals);
             }
 

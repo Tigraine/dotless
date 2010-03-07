@@ -101,7 +101,7 @@ namespace dotless.Test.Unit.engine.Literals
             Assert.AreEqual(255, color.B);
         }
 
-        [Test, Ignore]
+        [Test]
         public void CanRetrieveColorHex()
         {
             var color = new Color(17, 34, 51);

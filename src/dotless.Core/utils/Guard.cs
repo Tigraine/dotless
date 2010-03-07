@@ -18,10 +18,13 @@ using System.Linq;
 using System.Text;
 using dotless.Core.engine;
 using dotless.Core.exceptions;
+using dotless.Core.parser;
+using nLess;
+using Peg.Base;
 
 namespace dotless.Core.utils
 {
-    public static class Guard
+    internal static class Guard
     {
         public static void Expect(string expected, string actual, object @in)
         {
@@ -49,6 +52,7 @@ namespace dotless.Core.utils
             var expected = typeof(TExpected).Name.ToLowerInvariant();
 
             var message = string.Format("Expected {0} in {1}, found {2}", expected, @in, actual.ToCss());
+//            var message = string.Format("Expected {0} in {1}, found {2} {3}", expected, @in, actual.GetType().Name, actual.ToCss());
 
             throw new ParsingException(message);
         }
@@ -80,6 +84,18 @@ namespace dotless.Core.utils
                 return;
 
             var message = string.Format("Expected at most {0} arguments in {1}, found {2}", expected, @in, actual);
+
+            throw new ParsingException(message);
+        }
+
+        public static void ExpectPegNode(LessPegNode node, params EnLess[] expectedTypes)
+        {
+            if (expectedTypes.Contains(node.Type())) 
+                return;
+
+            var typeString = string.Join(", ", expectedTypes.Select(t => t.ToString()).ToArray());
+
+            var message = string.Format("Expected ({0}), found {1}", typeString, node.Type());
 
             throw new ParsingException(message);
         }

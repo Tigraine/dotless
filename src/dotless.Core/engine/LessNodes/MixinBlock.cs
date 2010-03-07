@@ -8,21 +8,27 @@ namespace dotless.Core.engine
 {
     public class MixinBlock : ElementBlock
     {
-        public MixinBlock(string name, string selector) : base(name, selector)
+        public MixinBlock(string name, IEnumerable<Variable> parameters) : base(name)
         {
-            Arguments = new List<Variable>();
+            Parameters = new List<Variable>(parameters);
         }
 
         public MixinBlock(string name) : base(name)
         {
-            Arguments = new List<Variable>();
+            Parameters = new List<Variable>();
         }
 
-        public List<Variable> Arguments { get; set; }
+        public List<Variable> Parameters { get; set; }
+        public override bool Hide
+        {
+            get { return true; }
+            set { }
+        }
 
         public List<INode> GetClonedChildren(ElementBlock newParent, IEnumerable<Variable> arguments)
         {
-            Guard.ExpectMaxArguments(Arguments.Count, arguments.Count(), GetMixinString(arguments));
+            arguments = arguments ?? new Variable[] {};
+            Guard.ExpectMaxArguments(Parameters.Count, arguments.Count(), GetMixinString(arguments));
 
             var argumentBlock = new ElementBlock(Name) {Parent = newParent};
             var rulesBlock = new ElementBlock(Name + "_rules") {Parent = argumentBlock};
@@ -32,7 +38,7 @@ namespace dotless.Core.engine
             var clonedChildren = Children.Select(n => n.AdoptClone(rulesBlock)).ToList();
             rules.AddRange(clonedChildren);
 
-            var clonedArguments = Arguments.Select(n => n.AdoptClone(argumentBlock)).Cast<Variable>().ToList();
+            var clonedArguments = Parameters.Select(n => n.AdoptClone(argumentBlock)).Cast<Variable>().ToList();
 
             var overridenArguments = new List<Variable>();
             var foundNamedArgument = false;
@@ -45,7 +51,7 @@ namespace dotless.Core.engine
                     if (foundNamedArgument)
                         throw new ParsingException(string.Format("Positional arguments must appear before all named arguments. in {0}", GetMixinString(arguments)));
 
-                    if (position < Arguments.Count)
+                    if (position < Parameters.Count)
                         newArgument = clonedArguments[position];
                 }
                 else

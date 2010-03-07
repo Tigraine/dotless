@@ -121,7 +121,7 @@ namespace dotless.Test.Spec.Mixin
         }
 
 
-        [Test]
+        [Test, Ignore("Unsupported")]
         public void MixinWithArgsInsideNamespace()
         {
             var less =

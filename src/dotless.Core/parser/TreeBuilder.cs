@@ -13,6 +13,7 @@
  * limitations under the License. */
 
 using System.Linq;
+using dotless.Core.utils;
 
 namespace dotless.Core.parser
 {
@@ -24,14 +25,14 @@ namespace dotless.Core.parser
     using System.IO;
     using System.Web;
     using nLess;
-    using Peg.Base;
     using String=engine.String;
 
-    public class TreeBuilder
+    internal class TreeBuilder
     {
-        public PegNode Root { get; set; }
+        public LessPegRootNode Root { get; set; }
         public string Src { get; set; }
-        public TreeBuilder(PegNode root, string src)
+
+        public TreeBuilder(LessPegRootNode root, string src)
         {
             Root = root;
             Src = src;
@@ -43,7 +44,7 @@ namespace dotless.Core.parser
         /// <returns></returns>
         public ElementBlock Build()
         {
-            return Primary(Root.child_);
+            return BuildPrimary(Root.Child);
         }
 
         /// <summary>
@@ -52,275 +53,504 @@ namespace dotless.Core.parser
         /// <returns></returns>
         public ElementBlock Build(ElementBlock tail)
         {
-            return tail == null ? Build() : Primary(Root.child_, tail);
+            return tail == null ? Build() : BuildPrimary(Root.Child, tail);
         }
 
-        private ElementBlock Primary(PegNode node)
+        public static ElementBlock BuildPrimary(LessPegNode node)
         {
-            var element = new ElementBlock("");
-            return Primary(node, element);
+            return BuildPrimary(node, new ElementBlock("*"));
         }
 
-        /// <summary>
-        /// primary: (import / declaration / ruleset / comment)* ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        private ElementBlock Primary(PegNode node, ElementBlock elementBlock)
+        //> <<Grammar Name="nLess">>
+
+        //> ^Parse: primary;
+
+        public static ElementBlock BuildPrimary(LessPegNode node, ElementBlock parent)
         {
-            foreach (var nextPrimary in node.AsEnumerable())
+            Guard.ExpectPegNode(node, EnLess.primary);
+            //> ^^primary: 
+            //>       (import / insert / declaration / ruleset / mixin / comment)*;
+
+            node.Children().ToList().ForEach(n => BuildPrimaryNode(n, parent));
+
+            return parent;
+        }
+
+        //> ^^comment:
+        //>       ws '/*' (!'*/' . )* '*/' ws / ws '//' (!'\n' .)* '\n' ws;
+
+        private static void BuildPrimaryNode(LessPegNode node, ElementBlock parent)
+        {
+            switch (node.Type())
             {
-                switch (nextPrimary.id_.ToEnLess())
+                case EnLess.import:
+                    BuildImport(node, parent);
+                    break;
+
+                case EnLess.insert:
+                    BuildInsert(node, parent);
+                    break;
+
+                case EnLess.declaration:
+                    BuildDeclaration(node, parent);
+                    break;
+                
+                case EnLess.ruleset:
+                    BuildRuleset(node, parent);
+                    break;
+                
+                case EnLess.mixin:
+                    BuildMixin(node, parent);
+                    break;
+
+                case EnLess.comment:
+                    break;
+
+                default:
+                    throw new ParsingException(string.Format("Unexpected node '{0}'", node.Type()));
+
+            }
+        }
+
+        //
+        // div, .class, body > p {...}
+        //
+        public static void BuildRuleset(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.ruleset);
+            //> ^^ruleset:
+            //>     standard_ruleset / mixin_ruleset;
+
+            var ruleset = node.Child;
+
+            if(ruleset.Type() == EnLess.standard_ruleset)
+                StandardRuleset(ruleset, parent);
+
+            if(ruleset.Type() == EnLess.mixin_ruleset)
+                MixinRuleset(ruleset, parent);
+        }
+
+        public static void StandardRuleset(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.standard_ruleset);
+            //> ^^standard_ruleset:
+            //>     selectors '{' ws primary ws '}' s hide ws;
+
+            //> ^^hide:
+            //>     ';'?;
+
+            var selectors = node.Child;
+            var primary = selectors.Next;
+            var hide = primary.Next;
+
+            foreach (var selector in BuildSelectors(selectors, parent, GetRulesetSelector).SelectMany( e => e ))
+            {
+                selector.Hide = !hide.IsEmpty();
+                BuildPrimary(primary, selector);
+            }
+        }
+
+        public static void MixinRuleset(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.mixin_ruleset);
+            // Mixin Declaration
+            //> ^^mixin_ruleset:
+            //>     ws mixin_name ws parameters ws '{' ws primary ws '}' ws;
+
+            
+            var name = node.Child;
+            var parameters = name.Next;
+            var primary = parameters.Next;
+
+            var mixinBlock = new MixinBlock(name.TextValue, BuildParameters(parameters, parent));
+            parent.Add(mixinBlock);
+
+            BuildPrimary(primary, mixinBlock);
+        }
+
+
+        public static void BuildMixin(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.mixin);
+            //> ^^mixin:
+            //>     parameterized_mixin / selector_mixin;
+
+            var mixin = node.Child;
+
+            if (mixin.Type() == EnLess.parameterized_mixin)
+                ParameterizedMixin(mixin, parent);
+
+            if (mixin.Type() == EnLess.selector_mixin)
+                SelectorMixin(mixin, parent);
+        }
+
+        // TODO: merge parameterized mixin and selector mixin to allow parameterized mixins inside namespaces!
+        private static void ParameterizedMixin(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.parameterized_mixin);
+            //> ^^parameterized_mixin:
+            //>     mixin_name mixin_arguments s ';' ws;
+
+            //> ^^mixin_name:
+            //>     '.' [-a-zA-Z0-9_]+;
+
+            //> ^^mixin_arguments:
+            //>     '(' s ((parameter &as / expressions &as) (s ',' s (parameter &as / expressions &as))*)? s ')';
+
+            var name = node.Child;
+            var arguments = name.Next;
+
+            var definition = parent.NearestAs<MixinBlock>(name.TextValue);
+
+            if (definition == null)
+                throw new ParsingException(string.Format("Unable to find mixin '{0}' in {1}", name.TextValue, parent.Name));
+
+            var args = arguments.Children()
+                .Select((a, i) => a.Type() == EnLess.expressions
+                                      ? new Variable(i.ToString(), BuildExpressions(a, parent))
+                                      : BuildParameter(a, parent));
+
+            var rules = definition.GetClonedChildren(parent, args);
+
+            parent.Children.AddRange(rules);
+        }
+
+        private static void SelectorMixin(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.selector_mixin);
+            //> ^^selector_mixin:
+            //>       ws selectors ';' ws;
+
+            var selectors = BuildSelectors(node.Child, parent, GetMixinSelector);
+
+            foreach (var path in selectors)
+            {
+                ElementBlock block;
+                try
                 {
-                    case EnLess.import:
-                        Import(nextPrimary.child_, elementBlock);
-                        //element.Children.AddRange(import);
-                        break;
-                    case EnLess.insert:
-                        Insert(nextPrimary.child_, elementBlock);
-                        //element.Children.AddRange(import);
-                        break;
-                    case EnLess.standard_ruleset:
-                        RuleSet(nextPrimary, elementBlock);
-                        break;
-                    case EnLess.mixin_ruleset:
-                        Mixin(nextPrimary,elementBlock);
-                        break;
-                    case EnLess.declaration:
-                        Declaration(nextPrimary.child_, elementBlock);
-                        break;
+                    block = path.Aggregate(parent.GetRoot(), (current, n) => current.Descend(n.Selector, n));
                 }
+                catch(NullReferenceException)
+                {
+                    throw new ParsingException(
+                        string.Format(
+                            "Unable to find mixin '{0}' in {1}",
+                            node.Child.TextValue, parent.Name));
+                }
+
+                var rules = block is MixinBlock ? ((MixinBlock)block).GetClonedChildren(parent, null) : block.Children;
+
+                parent.Children.AddRange(rules);
             }
-            return elementBlock;
         }
 
-        /// <summary>
-        /// import :  ws '@import'  S import_url medias? s ';' ;
-        /// </summary>
-        /// <param name="node"></param>
-        private IEnumerable<INode> Import(PegNode node, ElementBlock elementBlock)
+        public static IEnumerable<IEnumerable<ElementBlock>> BuildSelectors(LessPegNode node, ElementBlock parent, Func<LessPegNode, ElementBlock, IEnumerable<ElementBlock>> getSelectors)
         {
-            node = (node.child_ ?? node);
-//
-//            var path = "";
-//            if(node.ToEnLess()==EnLess.expressions)
-//            {
-//                var values = Expressions(node, element);
-//                var fakeVariableName = new Variable(string.Format("@{0}", DateTime.Now.Ticks), values);
-//                element.Add(fakeVariableName);
-//                path = fakeVariableName.ToCss();
-//            }
-//            else
-//            {
-//                path = (node).GetAsString(Src)
-//                    .Replace("\"", "").Replace("'", "");
-//            }
+            Guard.ExpectPegNode(node, EnLess.selectors);
+            //> ^^selectors:
+            //>       ws selector (s ',' ws selector)* ws;
 
-            var path = (node).GetAsString(Src)
-                .Replace("\"", "").Replace("'", "");
+            return node.Children().Select(e => getSelectors(e, parent));
+            // .Where( e => e != null );
+        }
 
-            if(HttpContext.Current!=null){
-                path = HttpContext.Current.Server.MapPath(path);
-            }
+        public static IEnumerable<ElementBlock> GetRulesetSelector(LessPegNode node, ElementBlock parent)
+        {
+            var last = GetSelectorParts(node)
+                .Aggregate(parent, (block, sel) =>
+                                       {
+                                           block.Add(sel);
+                                           return sel;
+                                       });
+            yield return last;
+        }
 
-            if(File.Exists(path))
+        public static IEnumerable<ElementBlock> GetMixinSelector(LessPegNode node, ElementBlock parent)
+        {
+            return GetSelectorParts(node);
+        }
+
+        //
+        // div > p a {...}
+        //
+        private static IEnumerable<ElementBlock> GetSelectorParts(LessPegNode node)
+        {
+            Guard.ExpectPegNode(node, EnLess.selector);
+            //> ^^selector:
+            //>       (s select element s)+;
+
+
+            var enumerator = node.Children().GetEnumerator();
+            while(enumerator.MoveNext())
             {
-                var engine = new ExtensibleEngineImpl(File.ReadAllText(path), elementBlock);
-                return engine.LessDom.Children;
+                var select = enumerator.Current.TextValue.Trim();
+
+                if(!enumerator.MoveNext())
+                    // throw? should never get here
+                    yield break;
+
+                var element = enumerator.Current.TextValue.Trim();
+
+                yield return new ElementBlock(element, select);
             }
-            return new List<INode>();
         }
 
-
-        private IEnumerable<INode> Insert(PegNode node, ElementBlock elementBlock)
+        public static IEnumerable<Variable> BuildParameters(LessPegNode node, ElementBlock parent)
         {
-            node = (node.child_ ?? node);
-            var path = (node).GetAsString(Src)
+            Guard.ExpectPegNode(node, EnLess.parameters);
+            //> ^^parameters:
+            //>       '(' s ')'
+            //>       /
+            //>       '(' parameter (s ',' s parameter)* ')'
+            //>       ;
+
+            return node.Children().Select(p => BuildParameter(p, parent));
+        }
+
+        public static Variable BuildParameter(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.parameter);
+            //> ^^parameter:
+            //>       variable s ':' s expressions;
+
+            var variable = node.Child;
+            var expressions = variable.Next;
+
+            return new Variable(variable.TextValue, BuildExpressions(expressions, parent), parent);
+        }
+
+        public static void BuildImport(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.import);
+            //> ^^import:
+            //>       ws '@import' S import_url medias? s ';' ws;
+
+            var importUrl = node.Child;
+            var medias = importUrl.Next;
+
+            if(importUrl.Child.Type() == EnLess.url)
+                importUrl = importUrl.Child.Child;
+
+            var path = importUrl.TextValue
                 .Replace("\"", "").Replace("'", "");
 
-            if (HttpContext.Current != null){
+            if (HttpContext.Current != null)
+            {
                 path = HttpContext.Current.Server.MapPath(path);
             }
 
-            if (File.Exists(path)){
-                var text = File.ReadAllText(path);
-                elementBlock.Add(new Insert(text));
+            if (!File.Exists(path) && Path.GetExtension(path) != ".less")
+                path = path + ".less";
+
+            if (File.Exists(path))
+            {
+                var source = File.ReadAllText(path);
+                var sourceDirectory = Path.GetDirectoryName(path);
+                var currentDirectory = Directory.GetCurrentDirectory();
+
+                if(!string.IsNullOrEmpty(sourceDirectory)) Directory.SetCurrentDirectory(sourceDirectory);
+                
+                new ExtensibleEngineImpl(source, parent);
+
+                if (!string.IsNullOrEmpty(sourceDirectory)) Directory.SetCurrentDirectory(currentDirectory);
             }
-            return new List<INode>();
         }
 
-
-        /// <summary>
-        /// declaration:  standard_declaration / catchall_declaration ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        private void Declaration(PegNode node, ElementBlock elementBlock)
+        public static void BuildInsert(LessPegNode node, ElementBlock parent)
         {
-            var name = node.GetAsString(Src).Replace(" ", "");
-            var nextNode = node.next_;
+            Guard.ExpectPegNode(node, EnLess.insert);
+            //> ^^insert:
+            //>       ws '@insert' S import_url medias? s ';' ws;
 
-            if(nextNode == null){
-                // TODO: emit warning: empty declaration //
+            // TODO: Create a failing test before implementing BuildInsert
+        }
+
+        //> ^^import_url:
+        //>       (string / url);
+
+        public static INode BuildUrl(LessPegNode node)
+        {
+            Guard.ExpectPegNode(node, EnLess.url);
+            //> ^^url:
+            //>       'url(' url_path ')';
+
+            //> ^^url_path:
+            //>       (string / [-a-zA-Z0-9_%$/.&=:;#+?]+);
+
+            var path = node.Child.TextValue;
+
+            return new Function("url", new[] {new String(path)});
+        }
+
+        //> ^^medias:
+        //>       [-a-z]+ (s ',' s [a-z]+)*;
+
+        //
+        // @my-var: 12px;
+        // height: 100%;
+        //
+        public static void BuildDeclaration(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.declaration);
+            //> ^^declaration:
+            //>       standard_declaration / empty_declaration;
+
+            //> ^^standard_declaration:
+            //>       ws (ident / variable) s ':' ws expressions (ws ',' ws expressions)* s (';'/ ws &'}') ws;
+
+            //> ^^empty_declaration:
+            //>       ws ident s ':' s ';' ws;
+
+            var declaration = node.Child;
+
+            if (declaration.Type() == EnLess.empty_declaration)
+            {
+                // TODO: throw? warn? ignore?
+                parent.Add(new Anonymous(declaration.TextValue));
                 return;
             }
-            if (nextNode.ToEnLess() == EnLess.comment)
-                nextNode = nextNode.next_; 
 
-            var values = Expressions(nextNode, elementBlock);
-            var property = name.StartsWith("@") ? new Variable(name, values) : new Property(name, values);
-            elementBlock.Add(property);
+            var ident = declaration.Child;
+
+            var name = ident.TextValue;
+            var expressions = ident.Next.Siblings();
+
+            var result = expressions.Select(e => BuildExpressions(e, parent));
+
+            if (ident.Type() == EnLess.variable)
+                parent.Add(new Variable(name, result, parent));
+            else
+                parent.Add(new Property(name, result, parent));
         }
 
-        /// <summary>
-        /// expressions: operation_expressions / space_delimited_expressions / [-a-zA-Z0-9_%*/.&=:,#+? \[\]()]+ ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private IEnumerable<INode> Expressions(PegNode node, ElementBlock elementBlock)
+        //
+        // An operation or compound value
+        //
+        public static INode BuildExpressions(LessPegNode node, ElementBlock parent)
         {
-            // Expression
-            switch (node.id_.ToEnLess())
-            {
-                case EnLess.operation_expressions:
-                    return OperationExpressions(node.child_, elementBlock).ToList();
-                case EnLess.space_delimited_expressions:
-                    return SpaceDelimitedExpressions(node.child_, elementBlock).ToList();
-                default:
-                    if (node.child_ == null) //CatchAll
-                        return new List<INode>
-                                   {
-                                       new Anonymous(node.GetAsString(Src))
-                                   };
-                    return Expressions(node.child_, elementBlock);
-            }
+            Guard.ExpectPegNode(node, EnLess.expressions);
+            //> ^^expressions:
+            //>       operation_expressions / space_delimited_expressions / [-a-zA-Z0-9_.&*/=:,+? \[\]()#%]+ ;
+
+            //> ^^operation_expressions:
+            //>       expression (operator expression)+;
+
+            //> ^^space_delimited_expressions:
+            //>       expression (WS expression)* important?;
+
+            var expression = node.Child;
+
+            if (expression == null)
+                return new Anonymous(node.TextValue);
+
+            var nodes = expression.Children().Select(e => BuildExpressionNode(e, parent));
+
+            return new Expression(nodes, parent);
         }
 
-        /// <summary>
-        /// operation_expressions:  expression (operator expression)+;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private IEnumerable<INode> OperationExpressions(PegNode node, ElementBlock elementBlock)
+        private static INode BuildExpressionNode(LessPegNode node, ElementBlock parent)
         {
-            yield return Expression(node.child_, elementBlock);
-            node = node.next_;            
+            // an expression node - operator, expression, or important
+
+            if (node.Type() == EnLess.@operator)
+                return BuildOperator(node);
             
-            //Tail
-            while (node != null)
-            {
-                switch (node.id_.ToEnLess())
-                {
-                    case EnLess.@operator:
-                        yield return new Operator(node.GetAsString(Src), elementBlock);
-                        break;
-                    case EnLess.expression:
-                        yield return Expression(node.child_, elementBlock);
-                        break;
-                    case EnLess.comment:
-                        node.ToString();
-                        break;
-                }
-                node = node.next_;
-            }
+            if (node.Type() == EnLess.important)
+                return BuildImportant(node);
+
+            return BuildExpression(node, parent);
         }
 
-        /// <summary>
-        /// space_delimited_expressions: expression (WS expression)* important? ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private IEnumerable<INode> SpaceDelimitedExpressions(PegNode node, ElementBlock elementBlock)
+        private static INode BuildExpression(LessPegNode node, ElementBlock parent)
         {
-            yield return Expression(node.child_, elementBlock);
-            node = node.next_;
+            Guard.ExpectPegNode(node, EnLess.expression);
+            //> ^^expression:
+            //>       '(' s expressions s ')' / entity ;
 
-            //Tail
-            while (node != null)
-            {
-                switch (node.id_.ToEnLess())
-                {
-                    case EnLess.expression:
-                        yield return Expression(node.child_, elementBlock);
-                        break;
-                    case EnLess.important:
-                        yield return new Keyword("!important");
-                        break;
-                }
-                node = node.next_;
-            }
+            var expression = node.Child;
+
+            if (expression.Type() == EnLess.expressions)
+                return BuildExpressions(expression, parent);
+
+            return BuildEntity(expression, parent);
         }
 
-        /// <summary>
-        /// expression: '(' s expressions s ')' / entity ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private INode Expression(PegNode node, ElementBlock elementBlock)
+        // !important
+        public static INode BuildImportant(LessPegNode node)
         {
-            switch (node.id_.ToEnLess())
-            {
-                case EnLess.expressions:
-                    return new Expression(Expressions(node, elementBlock), elementBlock);
-                case EnLess.entity:
-                    var entity  = Entity(node.child_, elementBlock);
-                    entity.Parent = elementBlock;
-                    return entity;
-                default:
-                    throw new ParsingException("Expression should either be child expressions or an entity");
-            }
+            Guard.ExpectPegNode(node, EnLess.important);
+            //> ^^important:
+            //>       s '!' s 'important';
+
+            return new Keyword(node.TextValue.Trim());
         }
 
-        /// <summary>
-        /// entity :  function / fonts / accessor / keyword  / variable / literal  ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private INode Entity(PegNode node, ElementBlock elementBlock)
+        //
+        // An identifier
+        //
+        //> ^^ident:
+        //>       '*'? '-'? [-a-z_] [-a-z0-9_]*;
+
+        public static Variable BuildVariable(LessPegNode node, ElementBlock parent)
         {
-            switch (node.id_.ToEnLess())
-            {
-                case EnLess.literal:
-                    return Entity(node.child_, elementBlock);
-                case EnLess.number:
-                    return Number(node);
-                case EnLess.color:
-                    return Color(node);
-                case EnLess.variable:
-                    return Variable(node);
-                case EnLess.accessor:
-                    return Accessor(node.child_, elementBlock);
-                case EnLess.fonts:
-                    return Fonts(node);
-                case EnLess.keyword:
-                    return Keyword(node);
-                case EnLess.function:
-                    return Function(node, elementBlock);
-                case EnLess.cursors:
-                    return Cursors(node);
-                default:
-                    return new Anonymous(node.GetAsString(Src));
-            }
+            Guard.ExpectPegNode(node, EnLess.variable);
+            //> ^^variable:
+            //>       '@' [-a-zA-Z0-9_]+;
+
+            return new Variable(node.TextValue, new INode[]{}, parent);
         }
+        
+        //
+        // div / .class / #id / input[type="text"] / lang(fr)
+        //
+        //> ^^element:
+        //>      ( (class / id / tag / ident) attribute* ('(' [a-zA-Z]+ ')' / '(' (pseudo_exp / selector / [0-9]+) ')' )? )+
+        //>      / attribute+ / '@media' / '@font-face'
+        //>      ;
+        
+        //
+        // 4n+1
+        //
+        //> pseudo_exp:
+        //>       '-'? ([0-9]+)? 'n' ([-+] [0-9]+)?;
 
+        //
+        // [type="text"]
+        //
+        //> ^^attribute:
+        //>       '[' tag ([|~*$^]? '=') (string / [-a-zA-Z_0-9]+) ']' / '[' (tag / string) ']';
 
+        //> ^^class:
+        //>       '.' [_a-zA-Z] [-a-zA-Z0-9_]*;
 
-        /// <summary>
-        /// accessor: accessor_name '[' accessor_key ']'; 
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        /// <returns></returns>
-        private INode Accessor(PegNode node, ElementBlock elementBlock)
+        //> ^^id:
+        //>       '#' [_a-zA-Z] [-a-zA-Z0-9_]*;
+
+        //> ^^tag:
+        //>       [a-zA-Z] [-a-zA-Z]* [0-9]? / '*';
+
+        //> ^^select:
+        //>       (s [+>~] s / '::' / s ':' / S)?;
+        
+        public static INode BuildAccessor(LessPegNode node, ElementBlock parent)
         {
-            var ident = node.GetAsString(Src);
-            var key = node.next_.GetAsString(Src).Replace("'", "");
-            var el = elementBlock.NearestAs<ElementBlock>(ident);
+            Guard.ExpectPegNode(node, EnLess.accessor);
+            //> ^^accessor:
+            //>       accessor_name '[' accessor_key ']';
+            
+            //> ^^accessor_name:
+            //>       (class / id / tag);
+            
+            //> ^^accessor_key:
+            //>       (string / variable);
+
+            var accessorName = node.Child;
+            var accessorKey = accessorName.Next;
+
+            var name = accessorName.TextValue;
+            var key = accessorKey.TextValue.Replace("'", "").Replace("\"", "");
+
+            var el = parent.NearestAs<ElementBlock>(name);
             if (el != null)
             {
                 var prop = el.GetAs<Property>(key);
@@ -329,349 +559,263 @@ namespace dotless.Core.parser
             return new Anonymous("");
         }
 
-        /// <summary>
-        /// function: function_name arguments ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="element"></param>
-        /// <returns></returns>
-        private INode Function(PegNode node, ElementBlock element)
+        public static INode BuildOperator(LessPegNode node)
         {
-            var funcName = node.child_.GetAsString(Src);
-            var arguments = Arguments(node.child_.next_, element);
-            return new Function(funcName, arguments.ToList());
+            Guard.ExpectPegNode(node, EnLess.@operator);
+            //> ^^operator:
+            //>       S [-+*/] S / [-+*/] ;
+
+            return new Operator(node.TextValue.Trim());
         }
 
-        /// <summary>
-        /// arguments : '(' s argument s (',' s argument s)* ')';
-        /// argument : color / number unit / string / [a-zA-Z]+ '=' dimension / function / expressions / [-a-zA-Z0-9_%$/.&=:;#+?]+ / keyword (S keyword)*;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="element"></param>
-        /// <returns></returns>
-        private IEnumerable<INode> Arguments(PegNode node, ElementBlock element)
+        //
+        // Functions and arguments
+        //
+        public static INode BuildFunction(LessPegNode node, ElementBlock parent)
         {
-            foreach (var argument in node.AsEnumerable())
+            Guard.ExpectPegNode(node, EnLess.function);
+            //> ^^function:
+            //>       function_name arguments;
+
+            //> ^^function_name:
+            //>       [-a-zA-Z_]+;
+
+            var name = node.Child;
+            var arguments = name.Next;
+
+            return new Function(name.TextValue, BuildArguments(arguments, parent));
+        }
+
+        private static IEnumerable<INode> BuildArguments(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.arguments);
+            //> ^^arguments:
+            //>       '(' s expressions s (',' s expressions s)* ')'
+            //>       /
+            //>       '(' s ')'
+            //>       ;
+
+            return node.Children().Select(e => BuildExpressions(e, parent));
+        }
+
+        //*** Entity ***//
+
+        //
+        // Entity: Any whitespace delimited token
+        //
+        private static INode BuildEntity(LessPegNode node, ElementBlock parent)
+        {
+            Guard.ExpectPegNode(node, EnLess.entity);
+            //> ^^entity:
+            //>       url / alpha / function / accessor / keyword / variable / literal / font;
+
+            var entity = node.Child;
+
+            switch (entity.Type())
             {
-                if (argument.child_ == null)
-                    yield return new Anonymous(argument.GetAsString(Src));
-                else
-                {
-                    switch (argument.child_.id_.ToEnLess())
-                    {
-                        case EnLess.color:
-                            yield return Color(argument.child_);
-                            break;
-                        case EnLess.number:
-                            yield return Number(argument.child_);
-                            break;
-                        case EnLess.function:
-                            yield return Function(argument.child_, element);
-                            break;
-                        case EnLess.expressions:
-                            yield return Expression(argument.child_, element);
-                            break;
-                        case EnLess.@string:
-                            yield return new String(argument.GetAsString(Src));
-                            break;
-                        case EnLess.keyword:
-                            yield return new Keyword(argument.GetAsString(Src));
-                            break;
-                        default:
-                            yield return new Anonymous(argument.GetAsString(Src));
-                            break;
-                    }
-                }
+                case EnLess.url:
+                    return BuildUrl(entity);
+
+                case EnLess.alpha:
+                    return BuildAlpha(entity, parent);
+
+                case EnLess.function:
+                    return BuildFunction(entity, parent);
+
+                case EnLess.accessor:
+                    return BuildAccessor(entity, parent);
+
+                case EnLess.keyword:
+                    return BuildKeyword(entity);
+
+                case EnLess.variable:
+                    return BuildVariable(entity, parent);
+
+                case EnLess.literal:
+                    return BuildLiteral(entity);
+
+                case EnLess.font:
+                    return BuildFont(entity);
+
+                default:
+                    return new Anonymous(entity.TextValue);
+
             }
         }
 
-        /// <summary>
-        /// keyword: [-a-zA-Z]+ !ns;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Keyword(PegNode node)
+        //private static INode BuildFonts(LessPegNode node)
+        //{
+        //    Guard.ExpectPegNode(node, EnLess.fonts);
+        //    //> ^^fonts:
+        //    //>       font (s ',' s font)+;
+        //
+        //    var fonts = node.Children()
+        //        .Select( f => f.TextValue);
+        //
+        //    return new FontFamily(fonts.ToArray());
+        //}
+
+        private static INode BuildFont(LessPegNode node)
         {
-            return new Keyword(node.GetAsString(Src));
+            Guard.ExpectPegNode(node, EnLess.font);
+            //> ^^font:
+            //>       [a-zA-Z] [-a-zA-Z0-9]* !ns
+            //>       / 
+            //>       string
+            //>       ;
+
+            var value = node.TextValue;
+
+            if (node.Child != null)
+                return new String(value);
+
+            return new Keyword(value);
         }
 
-        /// <summary>
-        /// fonts : font (s ',' s font)+  ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Fonts(PegNode node)
+        //
+        // Tokens which don't need to be evaluated
+        //
+        private static INode BuildLiteral(LessPegNode node)
         {
-            var fonts = from childNode in node.AsEnumerable()
-                        select (childNode.child_ ?? childNode).GetAsString(Src);
-            return new FontFamily(fonts.ToArray());
+            Guard.ExpectPegNode(node, EnLess.literal);
+            //> ^^literal:
+            //>       color / (dimension / [-a-z]+) '/' dimension / number unit / string;
+
+            var literal = node.Child;
+
+            switch (literal.Type())
+            {
+                case EnLess.color:
+                    return BuildColor(literal);
+
+                case EnLess.number:
+                    return BuildNumber(literal);
+
+                case EnLess.@string:
+                    return new String(literal.TextValue);
+
+                default:
+                    return new Anonymous(node.TextValue);
+            }
         }
 
-        /// <summary>
-        /// cursor (s ',' s cursor)+  ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Cursors(PegNode node)
+
+        //
+        // `blue`, `small`, `normal` etc.
+        //
+        private static Keyword BuildKeyword(LessPegNode node)
         {
-            var set = from childNode in node.AsEnumerable()
-                        select (childNode.child_ ?? childNode).GetAsString(Src);
-            return new CursorSet(set.ToArray());
+            Guard.ExpectPegNode(node, EnLess.keyword);
+            //> ^^keyword:
+            //>       [-a-zA-Z]+ !ns;
+
+            return new Keyword(node.TextValue);
         }
 
+        //
+        // 'hello world' / "hello world"
+        //
+        //> ^^string:
+        //>       ['] (!['] . )* [']
+        //>       /
+        //>       ["] (!["] . )* ["]
+        //>       ;
 
-        /// <summary>
-        /// number: '-'? [0-9]* '.' [0-9]+ / '-'? [0-9]+;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Number(PegNode node)
+        //
+        // Numbers & Units
+        //
+        //> ^^dimension:
+        //>       number unit;
+
+        private static INode BuildNumber(LessPegNode node)
         {
-            var val = float.Parse(node.GetAsString(Src), NumberFormatInfo.InvariantInfo);
+            Guard.ExpectPegNode(node, EnLess.number);
+            //> ^^number:
+            //>       '-'? [0-9]* '.' [0-9]+ / '-'? [0-9]+;
+
+            //> ^^unit:
+            //>       ('px'/'em'/'pc'/'%'/'ex'/'in'/'deg'/'s'/'pt'/'cm'/'mm')?;
+
+            var val = float.Parse(node.TextValue, NumberFormatInfo.InvariantInfo);
             var unit = "";
-            node = node.next_;
-            if (node != null && node.id_.ToEnLess() == EnLess.unit) unit = node.GetAsString(Src);
+            node = node.Next;
+            
+            if (node != null && node.Type() == EnLess.unit) 
+                unit = node.TextValue;
+            
             return new Number(unit, val);
         }
 
-        /// <summary>
-        /// color: '#' rgb;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Color(PegNode node)
+        //
+        // Color
+        //
+        public static Color BuildColor(LessPegNode node)
         {
-            return RGB(node.child_);
+            Guard.ExpectPegNode(node, EnLess.color);
+            //> ^^color:
+            //>       '#' rgb;
+
+            var rgb = BuildRgb(node.Child);
+
+            return new Color(rgb);
         }
 
-        /// <summary>
-        /// rgb:(rgb_node)(rgb_node)(rgb_node) / hex hex hex ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode RGB(PegNode node)
+        //
+        // 00ffdd / 0fd
+        //
+        public static int BuildRgb(LessPegNode node)
         {
-            int r = 0, g = 0, b = 0;
-            string tmp;
+            Guard.ExpectPegNode(node, EnLess.rgb);
+            //> ^^rgb:
+            //>       rgb_node rgb_node rgb_node
+            //>       /
+            //>       hex hex hex;
 
-            var rgbNode = node.child_; //Fisrt node;
-            if (rgbNode != null)
-            {
-                tmp = rgbNode.GetAsString(Src);
-                r = int.Parse(tmp.Length==1 ? tmp+tmp : tmp, NumberStyles.HexNumber);
-                rgbNode = rgbNode.next_;
-                if (rgbNode != null)
-                {
-                    tmp = rgbNode.GetAsString(Src);
-                    g = int.Parse(tmp.Length == 1 ? tmp + tmp : tmp, NumberStyles.HexNumber);
-                    rgbNode = rgbNode.next_;
-                    if (rgbNode != null)
-                    {
-                        tmp = rgbNode.GetAsString(Src);
-                        b = int.Parse(tmp.Length == 1 ? tmp + tmp : tmp, NumberStyles.HexNumber);
-                    }
-                }
-            }
-            return new Color(r, g, b);
+            var value = node.TextValue;
+
+            if(value.Length == 3)
+                value = new string(new[] { value[0], value[0], value[1], value[1], value[2], value[2] });
+
+            return int.Parse(value, NumberStyles.HexNumber);
         }
 
-        /// <summary>
-        /// variable: '@' [-_a-zA-Z0-9]+; 
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private INode Variable(PegNode node)
+        //> ^^rgb_node:
+        //>       hex hex;
+
+        //> ^^hex:
+        //>       [a-fA-F0-9];
+
+        //
+        // Special case for IE alpha filter
+        //
+        public static INode BuildAlpha(LessPegNode node, ElementBlock parent)
         {
-            return new Variable(node.GetAsString(Src));
-        }
+            Guard.ExpectPegNode(node, EnLess.alpha);
+            //> ^^alpha:
+            //>       'alpha' s '(' s 'opacity=' variable ')';
 
-        /// <summary>
-        /// ruleset: selectors [{] ws prsimary ws [}] ws /  ws selectors ';' ws;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-        private void RuleSet(PegNode node, ElementBlock elementBlock)
-        {
-            foreach (var el in Selectors(node.child_, els => StandardSelectors(elementBlock, els)))
-                Primary(node.child_.next_, el);
-        }
-        /// <summary>
-        /// TODO: Added quick fix for multipule mixins, but need to add mixins with variables which will changes things a bit
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="elementBlock"></param>
-//        private void OldMixin(PegNode node, Element element)
-//        {
-//            var root = element.GetRoot();
-//            foreach (var el in Selectors(node.child_, els => els))
-//                root = root.Descend(el.Selector, el);
-//            if (root.Children != null) element.Children.AddRange(root.Children);
-//        }
-        private void Mixin(PegNode node, ElementBlock elementBlock)
-        {
-            var root = elementBlock.GetRoot();
-            var rules = new List<INode>();
-            foreach (var mixins in node.AsEnumerable())
-            {
-                var selectors = Selectors(mixins, els => els).ToList();
-                if (selectors.Count() > 1)
-                {
-                    foreach (var el in selectors)
-                        root = root.Descend(el.Selector, el);
+            var variable = BuildVariable(node.Child, parent);
 
-                    var last = selectors.Last();
-
-                    var children = GetMixinChildren(elementBlock, last, root);
-
-                    if(children != null)
-                        rules.AddRange(children);
-                }
-                else
-                {
-                    var el = selectors.First();
-                    foreach (var mixinElement in root.Nearests(el.Name))
-                    {
-                        var children = GetMixinChildren(elementBlock, el, mixinElement);
-
-                        if(children != null)
-                            rules.AddRange(children);
-                    }
-                }
-                
-            }
-
-            elementBlock.Children.AddRange(rules);
-        }
-
-        private static IEnumerable<INode> GetMixinChildren(ElementBlock newParentBlock, ElementBlock mixinRule, ElementBlock mixinBlock)
-        {
-
-            if (mixinBlock.Children == null)
-                return null;
-
-            IEnumerable<INode> children;
-            if (mixinBlock is MixinBlock)
-            {
-                var mixin = ((MixinBlock)mixinBlock);
-
-                List<Variable> arguments = null;
-                if (mixinRule is MixinBlock)
-                    arguments = (mixinRule as MixinBlock).Arguments;
-
-                children = mixin.GetClonedChildren(newParentBlock, arguments ?? new List<Variable>());
-            }
-            else
-                children = mixinBlock.Children;
-
-            return children;
-        }
-
-        /// <summary>
-        /// standard_ruleset: ws selectors [{] ws primary ws [}] ws;
-        /// </summary>
-        /// <param name="elementBlock"></param>
-        /// <param name="els"></param>
-        /// <returns></returns>
-        private static IEnumerable<ElementBlock> StandardSelectors(ElementBlock elementBlock, IEnumerable<ElementBlock> els)
-        {
-            foreach (var el in els)
-            {
-                elementBlock.Add(el);
-                elementBlock = elementBlock.Last;
-            }
-            yield return elementBlock;
-        }
-
-        /// <summary>
-        /// selectors :  ws selector (s ',' ws selector)* ws ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="action"></param>
-        /// <returns></returns>
-        private IEnumerable<ElementBlock> Selectors(PegNode node, Func<IEnumerable<ElementBlock>, IEnumerable<ElementBlock>> action)
-        {
-            foreach(var selector in node.AsEnumerable(x => x.id_.ToEnLess() == EnLess.selector))
-            {
-                var selectors = Selector(selector);
-                foreach(var s in action(selectors)) yield return s;
-            }
-        }
-
-        /// <summary>
-        /// selector : (s select element s)+ arguments? ;
-        /// </summary>
-        /// <param name="node"></param>
-        /// <returns></returns>
-        private IEnumerable<ElementBlock> Selector(PegNode node)
-        {
-            var enumerator = node.AsEnumerable().GetEnumerator();
-            while(enumerator.MoveNext())
-            {
-                ElementBlock block;
-
-                var selector = enumerator.Current.GetAsString(Src).Trim();
-                enumerator.MoveNext();
-                var name = enumerator.Current.GetAsString(Src);
-
-                var next = enumerator.Current.next_;
-                var isMixinWithArgs = next != null && next.ToEnLess() == EnLess.arguments;
-
-                if (isMixinWithArgs)
-                {
-                    var mixinBlock = new MixinBlock(name, selector);
-                    block = mixinBlock;
-
-                    var arguments = GetMixinArguments(next, block);
-                    enumerator.MoveNext();
-
-                    foreach (var argument in arguments)
-                        mixinBlock.Arguments.Add(argument);
-                }
-                else
-                    block = new ElementBlock(name, selector);
-
-                yield return block;
-            }
+            return new String(node.TextValue.Replace(variable.Name, variable.Evaluate().ToCss()));
         }
 
 
-        private IEnumerable<Variable> GetMixinArguments(PegNode arguments, ElementBlock block)
-        {
-            var enumerator = arguments.AsEnumerable().GetEnumerator();
-            var variables = new List<Variable>();
-            var position = 0;
+        //*** Common ***//
 
-            while (enumerator.MoveNext())
-            {
-                var node = enumerator.Current;
+        //
+        // Whitespace
+        //
+        //> s: [ ]*;
+        //> S: [ ]+;
+        //> ws: [\n\r\t ]*;
+        //> WS: [\n\r\t ]+;
 
-                string name;
-                IEnumerable<INode> value;
-                if (node.child_.ToEnLess() == EnLess.variable) // expect "@variable: expression"
-                {
-                    name = node.child_.GetAsString(Src);
-                    value = Expressions(node.child_.next_, block);
-                }
-                else  // expect "expresion"
-                {
-                    // HACK: to make Arguments return as expected.
-                    var tmpNode = new PegNode(null, (int) EnLess.arguments);
-                    tmpNode.child_ = new PegNode(tmpNode, (int)EnLess.argument);
-                    tmpNode.child_.child_ = node.child_;
-
-                    name = position.ToString();
-                    value = Arguments(tmpNode, block).ToList();
-                }
-
-                variables.Add(new Variable(name, value));
-
-                if(node.next_ == null || node.next_.ToEnLess() != EnLess.argument)
-                    break;
-
-                position++;
-            }
-
-            return variables;
-        }
+        // Non-space char
+        //> ns: ![ ;,!})\n\r] .;
+        
+        // Argument separator
+        //> as: s [,)];
+        
+        //> <</Grammar>>
     }
 }

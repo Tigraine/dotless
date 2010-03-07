@@ -17,6 +17,8 @@ namespace dotless.Core.engine
             Children.Add(token);
         }
 
+        public abstract bool Hide { get; set; }
+
         public bool IsEmpty
         {
             get { return Children.Count() == 0; }

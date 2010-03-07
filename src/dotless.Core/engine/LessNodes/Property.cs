@@ -26,16 +26,6 @@ namespace dotless.Core.engine
         {
         }
 
-        public Property(string key, INode value)
-            : this(key, value, null)
-        {
-        }
-
-        public Property(string key, INode value, ElementBlock parent)
-            : this(key, new List<INode> {value}, parent)
-        {
-        }
-
         public Property(string key, IEnumerable<INode> value)
             : this(key, value, null)
         {
@@ -48,6 +38,9 @@ namespace dotless.Core.engine
                 node.Parent = this;
             }
             Value = new Expression(value, this);
+            Value.Delimiter = ",";
+            Value.Parent = this;
+
             _eval = null;
             Parent = parent;
         }
@@ -65,17 +58,6 @@ namespace dotless.Core.engine
             get { return Value == null; }
         }
 
-        public void Add(INode token)
-        {
-            token.Parent = this;
-            Value.Add(token);
-        }
-
-        public void Add(string token)
-        {
-            var node = new Anonymous(token) {Parent = this};
-            Add(node);
-        }
 
         public override bool Equals(object obj)
         {

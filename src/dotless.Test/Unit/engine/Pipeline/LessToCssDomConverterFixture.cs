@@ -59,8 +59,8 @@ namespace dotless.Test.Unit.engine.Pipeline
         private static ElementBlock GetElementBlock()
         {
             var elementShouldBeRendered = new ElementBlock(".showme");
-            elementShouldBeRendered.Add(new Property("height", new Number("px", 1)));
-            elementShouldBeRendered.Add(new Property("width", new Number("px", 1)));
+            elementShouldBeRendered.Add(new Property("height", new[] { new Expression { new Number("px", 1) } }));
+            elementShouldBeRendered.Add(new Property("width", new[] { new Expression { new Number("px", 1) } }));
             return elementShouldBeRendered;
         }
     }

@@ -11,5 +11,6 @@ namespace dotless.Core.engine
         IList<ElementBlock> Elements { get; }
         IList<Insert> Inserts { get;  }
         void Add(INode token);
+        bool Hide { get; }
     }
 }

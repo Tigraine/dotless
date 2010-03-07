@@ -51,13 +51,12 @@ namespace dotless.Core.engine.Pipeline
 
         private void BuildCssDocumentImpl(IBlock node, ICollection<string> path)
         {
-            bool processChildNodes = true;
-            if (node is ElementBlock && !(node is MixinBlock))
-                BuildElement((ElementBlock) node, path);
-            if (node is IfBlock)
-                processChildNodes = ((IfBlock) node).Expression.Evaluate().Value;
+            if(node.Hide)
+                return;
 
-            if (processChildNodes)
+            if (node is ElementBlock)
+                BuildElement((ElementBlock) node, path);
+
             foreach (var nextNode in node.SubBlocks)
                 BuildCssDocumentImpl(nextNode, new List<string>(path));
         }
@@ -67,59 +66,6 @@ namespace dotless.Core.engine.Pipeline
             document = new CssDocument();
             BuildCssDocumentImpl(lessRootElementBlock, new List<string>());
             return document;
-        }
-    }
-
-    public class LessToCssDomConverterOld : ILessToCssDomConverter
-    {
-        private ElementBlock elementBlock;
-        private CssDocument _cssDocument;
-
-        private void BuildCssDocument()
-        {
-            _cssDocument = new CssDocument();
-            BuildCssDocumentImpl(elementBlock, new List<string>());
-        }
-
-        private void BuildCssDocumentImpl(ElementBlock elementBlock, ICollection<string> path)
-        {
-            if (!elementBlock.IsRoot())
-            {
-                path.Add(elementBlock.Selector.ToCss());
-                path.Add(elementBlock.Name);
-
-
-                //Only add an element to the document when we have reached the end of the path
-                if(elementBlock.Properties.Count !=0 )
-                {
-                 var cssProperties = new List<CssProperty>();
-
-                    foreach (var property in elementBlock.Properties)
-                        cssProperties.Add(new CssProperty(property.Key, property.Evaluate().ToCss()));
-
-                    //Get path content i.e. "p > a:Hover"
-                    var pathContent = string.Join(string.Empty, path.Where(p => !string.IsNullOrEmpty(p)).ToArray());
-                    pathContent = pathContent.StartsWith(" ") ? pathContent.Substring(1) : pathContent;
-                    _cssDocument.Elements.Add(new CssElement(pathContent, cssProperties));
-                }
-            }
-            if (elementBlock.Inserts.Count != 0){
-                foreach (var insert in elementBlock.Inserts)
-                    _cssDocument.Elements.Add(new CssElement { InsertContent = insert.ToString()});
-            }
-            //Keep going
-            foreach (var nextElement in elementBlock.Elements)
-            {
-                BuildCssDocumentImpl(nextElement, new List<string>(path));
-            }
-        }
-
-
-        public CssDocument BuildCssDocument(ElementBlock lessRootElementBlock)
-        {
-            elementBlock = lessRootElementBlock;
-            BuildCssDocument();
-            return _cssDocument;
         }
     }
 }

@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System.Linq;
 using dotless.Core.engine.CssNodes;
 using dotless.Core.engine.Pipeline;
 
@@ -19,22 +20,45 @@ namespace dotless.Core.engine
 {
     public class ExtensibleEngineImpl
     {
-        public ElementBlock LessDom { get; set; }
-        public CssDocument CssDom { get; set; }
-        public string Css { get; set; }
+        private readonly string _source;
+        private readonly ElementBlock _tail;
+
+        public ElementBlock LessDom { get; private set; }
+
+        private CssDocument _cssDom;
+        public CssDocument CssDom
+        {
+            get
+            {
+                if(_cssDom == null)
+                {
+                    //Convert the LessDom to the CssDom and run any CSS Dom preprocessors set
+                    _cssDom = PipelineFactory.LessToCssDomConverter.BuildCssDocument(LessDom);
+                    _cssDom = RunCssDomPreprocessors(_cssDom);
+                }
+                return _cssDom;
+            }
+        }
+
+        private string _css;
+        public string Css
+        {
+            get
+            {
+                if(_css == null)
+                {
+                    //Convert the CssDom to Css
+                    _css = PipelineFactory.CssBuilder.ToCss(CssDom);                 
+                }
+                return _css;
+            }
+        }
 
         public ExtensibleEngineImpl(string source, ElementBlock tail)
         {
-            //Parse the source file and run any Less preprocessors set
-            LessDom = PipelineFactory.LessParser.Parse(source, tail);
-            RunLessDomPreprocessors();
-
-            //Convert the LessDom to the CssDom and run any CSS Dom preprocessors set
-            CssDom = PipelineFactory.LessToCssDomConverter.BuildCssDocument(LessDom);
-            RunCssDomPreprocessors();
-
-            //Convert the CssDom to Css
-            Css = PipelineFactory.CssBuilder.ToCss(CssDom); 
+          //Parse the source file and run any Less preprocessors set
+          LessDom = PipelineFactory.LessParser.Parse(source, tail);
+          LessDom = RunLessDomPreprocessors(LessDom);
         }
 
         /// <summary>
@@ -49,21 +73,26 @@ namespace dotless.Core.engine
         /// <summary>
         /// Preprocess the Less document before it is sent to the Css converter
         /// </summary>
-        private void RunLessDomPreprocessors()
+        /// <param name="lessDom"></param>
+        private static ElementBlock RunLessDomPreprocessors(ElementBlock lessDom)
         {
             if (PipelineFactory.LessDomPreprocessors != null)
-                foreach (var lessPreprocessor in PipelineFactory.LessDomPreprocessors)
-                    LessDom = lessPreprocessor.Process(LessDom);
+                lessDom = PipelineFactory.LessDomPreprocessors.Aggregate(lessDom, (current, lessPreprocessor) => lessPreprocessor.Process(current));
+            
+            return lessDom;
         }
 
         /// <summary>
+        /// 
         /// Preprocessing CSS Dom before its converted to Css
         /// </summary>
-        private void RunCssDomPreprocessors()
+        /// <param name="cssDom"></param>
+        private static CssDocument RunCssDomPreprocessors(CssDocument cssDom)
         {
             if (PipelineFactory.CssDomPreprocessors != null)
-                foreach (var cssPreprocessor in PipelineFactory.CssDomPreprocessors)
-                    CssDom = cssPreprocessor.Process(CssDom);
+                cssDom = PipelineFactory.CssDomPreprocessors.Aggregate(cssDom, (current, cssPreprocessor) => cssPreprocessor.Process(current));
+
+            return cssDom;
         }
 
     }

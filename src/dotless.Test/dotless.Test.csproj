@@ -129,7 +129,13 @@
     <Content Include="Spec\ExtensibleEngine\css\css.css">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
+    <Content Include="Spec\ExtensibleEngine\css\dash-prefix.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Spec\ExtensibleEngine\css\functions.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Spec\ExtensibleEngine\css\hidden.css">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Spec\ExtensibleEngine\css\import.css">
@@ -151,6 +157,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Spec\ExtensibleEngine\css\operations.css">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Spec\ExtensibleEngine\css\parens.css">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="Spec\ExtensibleEngine\css\rulesets.css">
@@ -198,7 +207,13 @@
     <None Include="Spec\ExtensibleEngine\less\comments.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="Spec\ExtensibleEngine\less\dash-prefix %28Multiple properties with same name%29.less">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="Spec\ExtensibleEngine\less\decimal-round.less">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="Spec\ExtensibleEngine\less\hidden.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="Spec\ExtensibleEngine\less\import\mixed-context-import.less">
@@ -246,6 +261,9 @@
     <None Include="Spec\ExtensibleEngine\less\operations.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="Spec\ExtensibleEngine\less\parens.less">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="Spec\ExtensibleEngine\less\rulesets.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -255,7 +273,7 @@
     <None Include="Spec\ExtensibleEngine\less\selectors.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="Spec\ExtensibleEngine\less\several-mixins.less">
+    <None Include="Spec\ExtensibleEngine\less\several-mixins %28Unsupported%29.less">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="Spec\ExtensibleEngine\less\strings.less">

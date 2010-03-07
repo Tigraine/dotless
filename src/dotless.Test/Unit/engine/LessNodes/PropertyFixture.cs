@@ -12,6 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System.Collections.Generic;
+
 namespace dotless.Test.Unit.engine
 {
     using Core.engine;
@@ -23,11 +25,16 @@ namespace dotless.Test.Unit.engine
         [Test]
         public void CanEvaluateColorProperties()
         {
-            var prop = new Property("background-color", new Color(1, 1, 1));
-            prop.Add(new Operator("+"));
-            prop.Add(new Color(1, 1, 1));
-            prop.Add(new Operator("*"));
-            prop.Add(new Number(20));
+            var list = new List<INode>
+                           {
+                               new Color(1, 1, 1),
+                               new Operator("+"),
+                               new Color(1, 1, 1),
+                               new Operator("*"),
+                               new Number(20)
+                           };
+            var exp = new Expression(list);
+            var prop = new Property("background-color", new []{exp});
 
             Assert.That(prop.ToCss(), Is.EqualTo("background-color: #151515;"));
 
@@ -40,11 +47,16 @@ namespace dotless.Test.Unit.engine
         [Test]
         public void CanEvaluateExpressionNumberProperties()
         {
-            var prop = new Property("height", new Number("px", 1));
-            prop.Add(new Operator("+"));
-            prop.Add(new Number("px", 2));
-            prop.Add(new Operator("*"));
-            prop.Add(new Number(20));
+            var list = new List<INode>
+                           {
+                               new Number("px", 1),
+                               new Operator("+"),
+                               new Number("px", 2),
+                               new Operator("*"),
+                               new Number(20)
+                           };
+            var exp = new Expression(list);
+            var prop = new Property("height", new[] {exp});
 
             Assert.That(prop.ToCss(), Is.EqualTo("height: 41px;"));
 
@@ -56,12 +68,17 @@ namespace dotless.Test.Unit.engine
         [Test]
         public void CanEvaluateSeveralPropertiesWithoutOperators()
         {
-            var prop = new Property("border", new Number("px", 1));
-            prop.Add(new Number("px", 2));
-            prop.Add(new Number("px", 2));
-            prop.Add(new Number("px", 2));
+            var list = new List<INode>
+                           {
+                               new Number("px", 1),
+                               new Number("px", 2),
+                               new Number("px", 3),
+                               new Number("px", 4),
+                           };
+            var exp = new Expression(list);
+            var prop = new Property("border", new[] {exp});
 
-            Assert.That(prop.ToCss(), Is.EqualTo("border: 1px 2px 2px 2px;"));
+            Assert.That(prop.ToCss(), Is.EqualTo("border: 1px 2px 3px 4px;"));
         }
     }
 }

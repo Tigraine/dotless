@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License. */
 
+using System;
 using System.Collections.Generic;
 using dotless.Core.exceptions;
 
@@ -23,6 +24,13 @@ namespace dotless.Core.engine.LessNodes
         public IfBlock(BoolExpression expression)
         {
             Expression = expression;
+        }
+
+
+        public override bool Hide
+        {
+            get { return !Expression.Evaluate().Value; }
+            set { }
         }
     }
 

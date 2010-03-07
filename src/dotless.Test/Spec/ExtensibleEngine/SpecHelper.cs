@@ -23,17 +23,20 @@ namespace dotless.Test.Spec.ExtensibleEngine
     {
         public static string Lessify(string fileName)
         {
-            var file = Path.Combine("Spec/ExtensibleEngine/less", fileName + ".less");
+            var file = fileName + ".less";
             return new ExtensibleEngineImpl(File.ReadAllText(file)).Css.Replace("\r\n", "\n");
         }
+
         public static string Css(string fileName)
         {
-            var file = Path.Combine("Spec/ExtensibleEngine/css", fileName + ".css");
+            var file = Path.Combine("../css", fileName + ".css");
             return File.ReadAllText(file).Replace("\r\n", "\n");
         }
 
         public static void ShouldEqual(string filename)
         {
+            Directory.SetCurrentDirectory("Spec/ExtensibleEngine/less"); // make filenames/imports relative to this directory
+
             var less = Lessify(filename);
             var css = Css(filename);
 

@@ -329,7 +329,7 @@ namespace dotless.Test.Spec.Functions
         [Test]
         public void TestAlphaOpacityHack()
         {
-            AssertExpression("ALPHA(Opacity=75)", "alpha(Opacity=75)");
+            AssertExpression("alpha(Opacity=75)", "alpha(Opacity=75)");
         }
 
         [Test]
