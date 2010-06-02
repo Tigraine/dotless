@@ -158,6 +158,27 @@ task t4css -depends Merge {
     $build_dir\t4css\    
 }
 
+task t4cssvs2010 -depends Merge {
+    $commit = Get-Git-Commit
+    $dir = pwd
+    $target = "$build_dir\t4css-vs2010"
+    echo "bla"
+    mkdir $target -ErrorAction silentlycontinue
+    mkdir $target\T4CssWeb -ErrorAction silentlycontinue
+    mkdir $target\T4CssWeb\Css -ErrorAction silentlycontinue
+    cp $build_dir\dotless.Core.dll $target\dotless.Core.dll
+    cp $dir\t4less\T4Css.sln $target\T4Css.sln
+    cp $dir\t4less\T4CssWeb\T4CssWeb.csproj $target\T4CssWeb\T4CssWeb.csproj
+    cp $dir\t4less\T4CssWeb\Css\T4CSS-VS2010.tt $target\T4CssWeb\Css\T4CSS.tt
+    cp $dir\t4less\T4CssWeb\Css\*.less $target\T4CssWeb\Css\
+    cp $dir\t4less\T4CssWeb\Css\*.css $target\T4CssWeb\Css\
+    cp $dir\t4less\T4CssWeb\Css\*.log $target\T4CssWeb\Css\
+    
+    
+    & $lib_dir\7zip\7za.exe a $release_dir\t4css-vs2010-$commit.zip `
+    $target
+}
+
 task Release -depends Test, Merge, t4css {
     $commit = Get-Git-Commit
     $filename = "dotless.core"
